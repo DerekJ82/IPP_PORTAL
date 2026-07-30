@@ -759,7 +759,7 @@
         '</div></div></div>';
     }
 
-    // Group entries by their main category
+    // Bucket stream entries under their group header
     var groups = {};
     var groupOrder = [];
     members.forEach(function(m) {
@@ -767,22 +767,23 @@
       groups[m.group].push(m);
     });
 
-    var sections = groupOrder.map(function(groupName) {
-      var cards = groups[groupName].map(function(m) {
-        var ownerHtml = m.owners.map(function(o) {
-          var ini = o.split(' ').map(function(w) { return w[0] || ''; }).slice(0, 2).join('').toUpperCase();
-          return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-            '<div class="avatar-sm" style="width:32px;height:32px;font-size:11px;flex-shrink:0">' + esc(ini) + '</div>' +
-            '<div class="tc-name">' + esc(o) + '</div>' +
-          '</div>';
-        }).join('');
+    function personCard(name, stream, muted) {
+      var ini = name.split(' ').map(function(w) { return w[0] || ''; }).slice(0, 2).join('').toUpperCase();
+      return '<div class="team-card"' + (muted ? ' style="opacity:.7"' : '') + '>' +
+        '<div class="avatar-sm"' + (muted ? ' style="background:rgba(75,40,109,0.05)"' : '') + '>' + esc(ini) + '</div>' +
+        '<div>' +
+          '<div class="tc-name">' + esc(name) + '</div>' +
+          (stream ? '<div class="tc-role">' + esc(stream) + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    }
 
-        return '<div style="padding:16px 18px;border:1px solid rgba(75,40,109,0.12);border-radius:12px;background:#fff">' +
-          (m.stream ? '<div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--purple);margin-bottom:10px">' + esc(m.stream) + '</div>' : '') +
-          ownerHtml +
-          (m.others.length ? '<div style="margin-top:6px;font-size:11px;color:rgba(43,22,63,0.45)">Also: ' + esc(m.others.join(', ')) + '</div>' : '') +
-        '</div>';
-      }).join('');
+    var sections = groupOrder.map(function(groupName) {
+      var cards = '';
+      groups[groupName].forEach(function(m) {
+        m.owners.forEach(function(o) { cards += personCard(o, m.stream, false); });
+        m.others.forEach(function(o)  { cards += personCard(o, m.stream, true);  });
+      });
 
       return '<div class="section">' +
         '<div class="eyebrow">' + esc(groupName) + '</div>' +
@@ -794,7 +795,7 @@
       '<div class="section" style="padding-bottom:24px">' +
         '<div class="eyebrow">Program Team</div>' +
         '<h2 class="section-title">Team Directory</h2>' +
-        '<p class="section-lead">2027 IPP working group by stream. Owners listed per stream; others associated shown below.</p>' +
+        '<p class="section-lead">2027 IPP working group organized by stream. Primary owners shown at full opacity; others associated shown slightly muted.</p>' +
       '</div>' +
       sections +
     '</div></div>';
