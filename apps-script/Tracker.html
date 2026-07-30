@@ -387,6 +387,24 @@
       .cal-event { font-size: 9px; }
     }
 
+    /* ---- Inline status select ---- */
+    .status-select {
+      border: none; outline: none; cursor: pointer;
+      font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+      padding: 3px 20px 3px 9px; border-radius: 20px; white-space: nowrap;
+      appearance: none; -webkit-appearance: none;
+      background-repeat: no-repeat; background-position: right 6px center; background-size: 10px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      transition: opacity .2s;
+    }
+    .status-select:disabled { opacity: .5; cursor: not-allowed; }
+    .status-select.badge-pending   { background-color: rgba(75,40,109,0.08);   color: #4B286D; }
+    .status-select.badge-progress  { background-color: rgba(75,40,109,0.15);   color: #4B286D; }
+    .status-select.badge-complete  { background-color: rgba(43,128,0,0.12);    color: #2B8000; }
+    .status-select.badge-overdue   { background-color: rgba(192,57,43,0.12);   color: #C0392B; }
+    .status-select.badge-at-risk   { background-color: rgba(179,107,0,0.12);   color: #B36B00; }
+    .status-select.badge-cancelled { background-color: rgba(43,22,63,0.08);    color: rgba(43,22,63,0.5); }
+
     /* ---- Modal ---- */
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(43,22,63,0.45);
@@ -657,7 +675,7 @@
         '<td class="fade">' + esc(r.owner) + '</td>' +
         '<td>' + esc(r.dueDate || r.startDate) + '</td>' +
         '<td class="' + dc + '">' + (r.daysLeft !== null ? (r.daysLeft < 0 ? Math.abs(r.daysLeft) + 'd late' : r.daysLeft + 'd') : '—') + '</td>' +
-        '<td><span class="badge ' + badgeCls(r.status) + '">' + esc(r.status) + '</span></td>' +
+        '<td>' + statusSelect(r.status, r.rowIndex) + '</td>' +
         (r.notes ? '<td class="fade">' + esc(r.notes.slice(0, 80)) + (r.notes.length > 80 ? '…' : '') + '</td>' : '<td></td>') +
       '</tr>';
     }).join('') : '<tr><td colspan="7"><div class="empty">No workback items loaded.</div></td></tr>';
@@ -894,6 +912,37 @@
   function renderAll() {
     var app = document.getElementById('app');
     app.innerHTML = renderOverview() + renderCalendar() + renderWorkback() + renderRaid() + renderTeam();
+  }
+
+  // ---- Inline status edit ----
+  var STATUS_OPTIONS = ['PENDING', 'IN PROGRESS', 'COMPLETE', 'OVERDUE', 'AT RISK', 'CANCELLED'];
+
+  function statusSelect(status, rowIndex) {
+    var opts = STATUS_OPTIONS.map(function(s) {
+      return '<option value="' + s + '"' + (s === status ? ' selected' : '') + '>' + s + '</option>';
+    }).join('');
+    return '<select class="status-select ' + badgeCls(status) + '" ' +
+      'onchange="saveWorkbackStatus(' + rowIndex + ', this)">' + opts + '</select>';
+  }
+
+  function saveWorkbackStatus(rowIndex, selectEl) {
+    var newStatus = selectEl.value;
+    selectEl.disabled = true;
+    google.script.run
+      .withSuccessHandler(function(result) {
+        selectEl.disabled = false;
+        if (result && result.success) {
+          selectEl.className = 'status-select ' + badgeCls(newStatus);
+          toast('Status updated ✓', 'success');
+        } else {
+          toast('Update failed: ' + (result && result.error || 'unknown'), 'error');
+        }
+      })
+      .withFailureHandler(function(err) {
+        selectEl.disabled = false;
+        toast('Update failed: ' + err, 'error');
+      })
+      .updateWorkbackStatus(rowIndex, newStatus);
   }
 
   // ---- Modal ----

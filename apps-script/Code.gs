@@ -50,7 +50,7 @@ function getPortalData() {
 function getWorkback(ss) {
   var sheet = getSheet(ss, TAB.WORKBACK_27) || getSheet(ss, TAB.WORKBACK_26);
   if (!sheet) return [];
-  var rows = sheetToObjects(sheet);
+  var rows = sheetToObjects(sheet, true);
   var today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -75,6 +75,7 @@ function getWorkback(ss) {
       status:     status,
       daysLeft:   daysLeft,
       notes:      r['Comments'] || r['Notes'] || '',
+      rowIndex:   r._rowIndex,
     };
   });
 }
@@ -233,6 +234,35 @@ function addMilestone(item) {
   }
 }
 
+// ---- Update workback item status in-place ----
+function updateWorkbackStatus(rowIndex, newStatus) {
+  try {
+    var ss    = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = getSheet(ss, TAB.WORKBACK_27) || getSheet(ss, TAB.WORKBACK_26);
+    if (!sheet) return { success: false, error: 'Workback tab not found' };
+
+    // Locate STATUS column in the header row
+    var data      = sheet.getDataRange().getValues();
+    var headerIdx = 0;
+    for (var i = 0; i < Math.min(data.length, 10); i++) {
+      if (data[i].filter(function(c) { return c !== '' && c !== null && c !== undefined; }).length >= 2) {
+        headerIdx = i; break;
+      }
+    }
+    var statusCol = -1;
+    data[headerIdx].forEach(function(h, j) {
+      if (String(h).trim().toUpperCase() === 'STATUS') statusCol = j + 1;
+    });
+    if (statusCol < 0) return { success: false, error: 'STATUS column not found' };
+
+    sheet.getRange(rowIndex, statusCol).setValue(newStatus);
+    return { success: true };
+  } catch (e) {
+    Logger.log('updateWorkbackStatus error: ' + e);
+    return { success: false, error: e.toString() };
+  }
+}
+
 // ---- Google Chat webhook notification ----
 function sendChatNotification(message) {
   var props = PropertiesService.getScriptProperties();
@@ -328,7 +358,7 @@ function getSheet(ss, name) {
   return sheet;
 }
 
-function sheetToObjects(sheet) {
+function sheetToObjects(sheet, withRowIndex) {
   var data = sheet.getDataRange().getValues();
   if (data.length < 2) return [];
   // Skip title rows — find first row with at least 2 non-empty cells
@@ -339,9 +369,10 @@ function sheetToObjects(sheet) {
     }
   }
   var headers = data[headerIdx].map(function(h) { return String(h).trim(); });
-  return data.slice(headerIdx + 1).map(function(row) {
+  return data.slice(headerIdx + 1).map(function(row, idx) {
     var obj = {};
     headers.forEach(function(h, i) { obj[h] = row[i]; });
+    if (withRowIndex) obj._rowIndex = headerIdx + idx + 2; // 1-based sheet row
     return obj;
   }).filter(function(r) {
     return Object.values(r).some(function(v) { return v !== '' && v !== null && v !== undefined; });
