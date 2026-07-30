@@ -7,7 +7,7 @@ var SHEET_ID = '1tiP3qFDvK_MZgnZpHK-CEkRSO1X-ist-84EmQKIekxw';
 
 // Tab names — must match the actual sheet tab labels exactly (fuzzy-matched below)
 var TAB = {
-  GOVERNANCE:   'Governance_Calendar',
+  GOVERNANCE:   'Governace Calendar',
   WORKBACK_27:  'Workback Plan 2027 - July v1',
   WORKBACK_26:  'Workback_Plan_2026_v2',
   RAID_LOG:     'RAID Log',
@@ -232,12 +232,14 @@ function debugSheetInfo() {
   // List every tab name
   result.allTabs = ss.getSheets().map(function(s) { return s.getName(); });
 
-  // For each target tab, show the first row of headers
+  // For each target tab, show the first 5 rows so we can see past title rows
   Object.keys(TAB).forEach(function(key) {
     var sheet = getSheet(ss, TAB[key]);
     if (sheet) {
-      var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-      result.targets[key] = { found: sheet.getName(), headers: headers };
+      var numRows = Math.min(5, sheet.getLastRow());
+      var numCols = Math.min(12, sheet.getLastColumn());
+      var rows = sheet.getRange(1, 1, numRows, numCols).getValues();
+      result.targets[key] = { found: sheet.getName(), first5rows: rows };
     } else {
       result.targets[key] = { found: null, looking_for: TAB[key] };
     }
@@ -292,8 +294,18 @@ function getSheet(ss, name) {
 function sheetToObjects(sheet) {
   var data = sheet.getDataRange().getValues();
   if (data.length < 2) return [];
-  var headers = data[0].map(function(h) { return String(h).trim(); });
-  return data.slice(1).map(function(row) {
+
+  // Skip title/merged rows — find first row with at least 2 non-empty cells
+  var headerIdx = 0;
+  for (var i = 0; i < Math.min(data.length, 10); i++) {
+    var nonEmpty = data[i].filter(function(c) {
+      return c !== '' && c !== null && c !== undefined;
+    }).length;
+    if (nonEmpty >= 2) { headerIdx = i; break; }
+  }
+
+  var headers = data[headerIdx].map(function(h) { return String(h).trim(); });
+  return data.slice(headerIdx + 1).map(function(row) {
     var obj = {};
     headers.forEach(function(h, i) { obj[h] = row[i]; });
     return obj;
