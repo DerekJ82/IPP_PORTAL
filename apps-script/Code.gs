@@ -5,14 +5,14 @@
 
 var SHEET_ID = '1tiP3qFDvK_MZgnZpHK-CEkRSO1X-ist-84EmQKIekxw';
 
-// Tab names — update if the sheet renames a tab
+// Tab names — must match the actual sheet tab labels exactly (fuzzy-matched below)
 var TAB = {
   GOVERNANCE:   'Governance_Calendar',
-  WORKBACK_27:  'Workback_Plan_2027_July_v1',
+  WORKBACK_27:  'Workback Plan 2027 - July v1',
   WORKBACK_26:  'Workback_Plan_2026_v2',
-  RAID_LOG:     'RAID_Log',
+  RAID_LOG:     'RAID Log',
   RAID_SUMMARY: 'RAID_Summary',
-  TEAM:         'Program_Team',
+  TEAM:         'R&R',
   ROLES:        'Roles_and_Responsibilities',
 };
 
@@ -137,20 +137,20 @@ function getRaid(ss) {
   });
 }
 
-// ---- Program Team ----
+// ---- Program Team (sourced from R&R tab) ----
 function getTeam(ss) {
-  var sheet = getSheet(ss, TAB.TEAM);
+  var sheet = getSheet(ss, TAB.TEAM) || getSheet(ss, TAB.ROLES);
   if (!sheet) return [];
   var rows = sheetToObjects(sheet);
 
   return rows.filter(function(r) {
-    return r['Name'] || r['Full Name'] || r['Employee'];
+    return r['Name'] || r['Full Name'] || r['Employee'] || r['Resource'] || r['Person'];
   }).map(function(r) {
     return {
-      name:  r['Name'] || r['Full Name'] || r['Employee'] || '',
-      role:  r['Role'] || r['Title'] || r['Function'] || '',
-      email: r['Email'] || r['Email Address'] || '',
-      team:  r['Team'] || r['Department'] || r['Workstream'] || '',
+      name:  r['Name'] || r['Full Name'] || r['Employee'] || r['Resource'] || r['Person'] || '',
+      role:  r['Role'] || r['Title'] || r['Function'] || r['Responsibilities'] || r['Responsibility'] || '',
+      email: r['Email'] || r['Email Address'] || r['Contact'] || '',
+      team:  r['Team'] || r['Department'] || r['Workstream'] || r['Stream'] || r['Area'] || '',
     };
   });
 }
@@ -257,10 +257,10 @@ function isAdminUser() {
 function getSheet(ss, name) {
   var sheet = ss.getSheetByName(name);
   if (!sheet) {
-    // Fuzzy match: strip underscores/spaces and compare lowercase
-    var slug = name.replace(/[_\s]/g, '').toLowerCase();
+    // Fuzzy match: strip all non-alphanumeric chars and compare lowercase
+    var slug = name.replace(/[^a-z0-9]/gi, '').toLowerCase();
     ss.getSheets().forEach(function(s) {
-      if (!sheet && s.getName().replace(/[_\s]/g, '').toLowerCase() === slug) sheet = s;
+      if (!sheet && s.getName().replace(/[^a-z0-9]/gi, '').toLowerCase() === slug) sheet = s;
     });
   }
   return sheet;
