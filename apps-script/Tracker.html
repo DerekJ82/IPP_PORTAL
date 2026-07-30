@@ -443,12 +443,21 @@
     .gantt-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgba(43,22,63,0.6); }
     .gantt-legend-dot { width: 14px; height: 10px; border-radius: 3px; flex-shrink: 0; }
     /* Gantt collapsible sections */
-    .gantt-sec-head { cursor: pointer; background: rgba(75,40,109,0.08); }
-    .gantt-sec-head:hover { background: rgba(75,40,109,0.13); }
+    .gantt-sec-pill-row { cursor: pointer; border-bottom: 2px solid rgba(75,40,109,0.14) !important; }
+    .gantt-sec-pill-row:hover { background: rgba(75,40,109,0.02) !important; }
+    .gantt-sec-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--purple); color: #fff;
+      border-radius: 999px; padding: 5px 14px 5px 9px;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+      max-width: 212px; overflow: hidden;
+      transition: background .2s var(--ease); flex-shrink: 0;
+    }
+    .gantt-sec-pill-row:hover .gantt-sec-pill { background: var(--dark); }
+    .gantt-sec-pill span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .gantt-sub-head { cursor: pointer; background: rgba(75,40,109,0.04); }
     .gantt-sub-head:hover { background: rgba(75,40,109,0.08); }
-    .gantt-sec-label { font-size: 13px; font-weight: 700; color: var(--purple); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .gantt-subsec-label { font-size: 12px; font-weight: 700; color: var(--dark); padding-left: 20px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gantt-subsec-label { font-size: 12px; font-weight: 700; color: var(--dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .gantt-sec-body { overflow: hidden; max-height: 9000px; transition: max-height .45s ease; }
     .gantt-sec-body.closed { max-height: 0; }
     .gantt-chev { transition: transform .3s ease; flex-shrink: 0; }
@@ -887,8 +896,8 @@
         var subBody = l1.tasks.map(taskRow).join('');
 
         bodyHtml +=
-          '<div class="gantt-row gantt-sub-head" onclick="toggleGanttSec(\'' + subId + '\')">' +
-            '<div class="gantt-row-label" style="padding-left:24px;display:flex;align-items:center;gap:6px;width:240px;min-width:240px;flex-shrink:0;border-right:1px solid rgba(75,40,109,0.08)">' +
+          '<div class="gantt-row gantt-sub-head" data-body="' + subId + '" onclick="toggleGanttSec(\'' + subId + '\')">' +
+            '<div style="padding-left:24px;display:flex;flex-direction:row;align-items:center;gap:6px;width:240px;min-width:240px;flex-shrink:0;border-right:1px solid rgba(75,40,109,0.08)">' +
               chevSvg + '<span class="gantt-subsec-label" style="padding-left:0">' + esc(l1.it.r.task) + '</span>' +
             '</div>' +
             '<div class="gantt-row-bars" style="flex:1;position:relative;height:44px">' + gridLines + todayLine + summaryBar(sp1) + '</div>' +
@@ -897,11 +906,11 @@
       });
 
       var l0Row = node.it
-        ? '<div class="gantt-row gantt-sec-head" onclick="toggleGanttSec(\'' + secId + '\')">' +
-            '<div class="gantt-row-label" style="width:240px;min-width:240px;flex-shrink:0;padding:8px 16px;border-right:1px solid rgba(75,40,109,0.12);display:flex;align-items:center;gap:6px">' +
-              chevSvg + '<span class="gantt-sec-label">' + esc(node.it.r.task) + '</span>' +
+        ? '<div class="gantt-row gantt-sec-pill-row" data-body="' + secId + '" onclick="toggleGanttSec(\'' + secId + '\')">' +
+            '<div style="width:240px;min-width:240px;flex-shrink:0;padding:6px 12px;border-right:1px solid rgba(75,40,109,0.08);display:flex;align-items:center">' +
+              '<div class="gantt-sec-pill">' + chevSvg + '<span>' + esc(node.it.r.task) + '</span></div>' +
             '</div>' +
-            '<div class="gantt-row-bars" style="flex:1;position:relative;height:44px">' + gridLines + todayLine + summaryBar(sp0) + '</div>' +
+            '<div class="gantt-row-bars" style="flex:1;position:relative;height:36px">' + gridLines + todayLine + summaryBar(sp0) + '</div>' +
           '</div>'
         : '';
 
@@ -936,14 +945,11 @@
     var body = document.getElementById(id);
     if (!body) return;
     body.classList.toggle('closed');
-    // Rotate chevron on the row that owns this section
-    var rows = document.querySelectorAll('.gantt-sec-head, .gantt-sub-head');
-    rows.forEach(function(row) {
-      if (row.getAttribute('onclick') && row.getAttribute('onclick').indexOf(id) > -1) {
-        var chev = row.querySelector('.gantt-chev');
-        if (chev) chev.classList.toggle('rotated');
-      }
-    });
+    var head = document.querySelector('[data-body="' + id + '"]');
+    if (head) {
+      var chev = head.querySelector('.gantt-chev');
+      if (chev) chev.classList.toggle('rotated');
+    }
   }
 
   function renderRaid() {

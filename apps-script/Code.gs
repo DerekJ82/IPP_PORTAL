@@ -46,10 +46,30 @@ function getPortalData() {
 }
 
 // ---- Workback Plan 2027 ----
-// Columns: MILESTONE | DEPENDENCIES | RESPONSIBLE | OWNER(S) | STATUS | START | END | Duration | Comments | | Executive Approvals
+// Columns: MILESTONE | DEPENDENCIES | RESPONSIBLE | OWNER(S) | STATUS | START | END | Duration | Comments | Level (col J) | Executive Approvals
+// Column J contains "Main" (L0 section), "Level 1" (L1 sub-section), or "Level 2" (task row) — case-insensitive
 function getWorkback(ss) {
   var sheet = getSheet(ss, TAB.WORKBACK_27) || getSheet(ss, TAB.WORKBACK_26);
   if (!sheet) return [];
+
+  // Read raw data to find the level column by header name, falling back to column J (index 9)
+  var rawData = sheet.getDataRange().getValues();
+  var headerIdx = 0;
+  for (var i = 0; i < Math.min(rawData.length, 10); i++) {
+    if (rawData[i].filter(function(c) { return c !== '' && c !== null && c !== undefined; }).length >= 2) {
+      headerIdx = i; break;
+    }
+  }
+  var LEVEL_NAMES = ['LEVEL', 'TYPE', 'GROUP LEVEL', 'HIERARCHY', 'ROW TYPE', 'SECTION TYPE', 'SECTION'];
+  var iLevel = 9; // column J (0-based)
+  var hdrs = rawData[headerIdx];
+  for (var c = 0; c < hdrs.length; c++) {
+    var hh = String(hdrs[c]).trim().toUpperCase().replace(/[^A-Z ]/g, '').trim();
+    if (LEVEL_NAMES.some(function(n) { return hh === n || hh.indexOf(n) > -1; })) {
+      iLevel = c; break;
+    }
+  }
+
   var rows = sheetToObjects(sheet, true);
   var today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -66,6 +86,20 @@ function getWorkback(ss) {
     var start      = parseDate(startRaw);
     var due        = parseDate(endRaw);
     var daysLeft   = due ? Math.round((due - today) / 86400000) : null;
+
+    // Resolve level from column J of raw data (_rowIndex is 1-based, rawData is 0-based)
+    var level = 2;
+    if (r._rowIndex != null && rawData[r._rowIndex - 1]) {
+      var cellVal = String(rawData[r._rowIndex - 1][iLevel] || '').trim().toLowerCase();
+      if (cellVal === 'main')                               level = 0;
+      else if (cellVal.indexOf('level 1') > -1 || cellVal === '1') level = 1;
+      else if (cellVal.indexOf('level 2') > -1 || cellVal === '2') level = 2;
+      else if (cellVal !== '')                              level = detectGroupLevel(task, owner);
+      else                                                  level = detectGroupLevel(task, owner);
+    } else {
+      level = detectGroupLevel(task, owner);
+    }
+
     return {
       task:         task,
       workstream:   workstream,
@@ -74,11 +108,11 @@ function getWorkback(ss) {
       startDateISO: start ? Utilities.formatDate(start, 'UTC', 'yyyy-MM-dd') : '',
       dueDate:      due ? formatDate(due) : endRaw,
       dueDateISO:   due ? Utilities.formatDate(due, 'UTC', 'yyyy-MM-dd') : '',
-      status:     status,
-      daysLeft:   daysLeft,
-      notes:      r['Comments'] || r['Notes'] || '',
-      rowIndex:   r._rowIndex,
-      level:      detectGroupLevel(task, owner),
+      status:       status,
+      daysLeft:     daysLeft,
+      notes:        r['Comments'] || r['Notes'] || '',
+      rowIndex:     r._rowIndex,
+      level:        level,
     };
   });
 }
