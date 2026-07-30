@@ -833,7 +833,8 @@
         var l = pct(it.s).toFixed(2), w = Math.max(0.4, pct(it.e) - pct(it.s)).toFixed(2);
         return '<div class="' + cls + '" style="left:' + l + '%;width:' + w + '%" title="' + esc(tip) + '"></div>';
       }
-      var l = pct(it.e).toFixed(2);
+      var anchor = it.e || it.s;
+      var l = pct(anchor).toFixed(2);
       return '<div class="' + cls + '" style="left:calc(' + l + '% - 7px);width:13px;height:13px;border-radius:2px;transform:translateY(-50%) rotate(45deg)" title="' + esc(tip) + '"></div>';
     }
 
