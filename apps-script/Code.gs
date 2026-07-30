@@ -63,15 +63,17 @@ function getWorkback(ss) {
     var endRaw     = r['END'] || r['End Date'] || r['Due Date'] || r['Target Date'] || '';
     var status     = normalizeStatus(r['STATUS'] || r['Status'] || '');
     var workstream = r['DEPENDENCIES'] || r['Workstream'] || '';
+    var start      = parseDate(startRaw);
     var due        = parseDate(endRaw);
     var daysLeft   = due ? Math.round((due - today) / 86400000) : null;
     return {
-      task:       task,
-      workstream: workstream,
-      owner:      owner,
-      startDate:  startRaw,
-      dueDate:    due ? formatDate(due) : endRaw,
-      dueDateISO: due ? Utilities.formatDate(due, 'UTC', 'yyyy-MM-dd') : '',
+      task:         task,
+      workstream:   workstream,
+      owner:        owner,
+      startDate:    startRaw,
+      startDateISO: start ? Utilities.formatDate(start, 'UTC', 'yyyy-MM-dd') : '',
+      dueDate:      due ? formatDate(due) : endRaw,
+      dueDateISO:   due ? Utilities.formatDate(due, 'UTC', 'yyyy-MM-dd') : '',
       status:     status,
       daysLeft:   daysLeft,
       notes:      r['Comments'] || r['Notes'] || '',
