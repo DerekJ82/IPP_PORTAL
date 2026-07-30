@@ -393,8 +393,9 @@
     .gantt-inner { min-width: 820px; }
     .gantt-head {
       display: flex; position: sticky; top: 0; z-index: 10;
-      background: rgba(75,40,109,0.04);
+      background: #fff;
       border-bottom: 2px solid rgba(75,40,109,0.15);
+      box-shadow: 0 2px 8px rgba(75,40,109,0.09);
     }
     .gantt-head-label {
       width: 240px; min-width: 240px; padding: 10px 16px;
@@ -448,13 +449,16 @@
     .gantt-section-pills { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
     /* Gantt collapsible sections */
     .gantt-sec-pill {
-      display: inline-flex; align-items: center; gap: 5px;
-      background: var(--purple); color: #fff; border: none; cursor: pointer;
-      border-radius: 999px; padding: 5px 14px 5px 9px;
+      display: inline-flex; align-items: center;
+      background: var(--purple); color: #fff; cursor: pointer;
+      border: 1.5px solid transparent;
+      border-radius: 999px; padding: 5px 14px;
       font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
-      transition: background .2s var(--ease);
+      transition: background .2s var(--ease), color .2s var(--ease), border-color .2s var(--ease);
     }
     .gantt-sec-pill:hover { background: var(--dark); }
+    .gantt-sec-pill.inactive { background: transparent; color: var(--purple); border-color: rgba(75,40,109,0.3); }
+    .gantt-sec-pill.inactive:hover { background: rgba(75,40,109,0.06); border-color: var(--purple); }
     .gantt-sec-pill span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
     .gantt-sub-head { cursor: pointer; background: rgba(75,40,109,0.04); }
     .gantt-sub-head:hover { background: rgba(75,40,109,0.08); }
@@ -887,7 +891,7 @@
     // Section pills rendered beside the legend
     var pillsHtml = tree.filter(function(n) { return !n.standalone && n.it; }).map(function(node) {
       return '<button class="gantt-sec-pill" data-body="' + node._secId + '" onclick="toggleGanttSec(\'' + node._secId + '\')">' +
-        chevSvg + '<span>' + esc(node.it.r.task) + '</span>' +
+        '<span>' + esc(node.it.r.task) + '</span>' +
       '</button>';
     }).join('');
 
@@ -948,7 +952,10 @@
     if (!body) return;
     body.classList.toggle('closed');
     var head = document.querySelector('[data-body="' + id + '"]');
-    if (head) {
+    if (!head) return;
+    if (head.classList.contains('gantt-sec-pill')) {
+      head.classList.toggle('inactive');
+    } else {
       var chev = head.querySelector('.gantt-chev');
       if (chev) chev.classList.toggle('rotated');
     }
