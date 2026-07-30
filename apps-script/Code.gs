@@ -87,16 +87,16 @@ function getWorkback(ss) {
   today.setHours(0, 0, 0, 0);
 
   return rows.filter(function(r) {
-    return r['Task'] || r['Activity'] || r['Workstream'] || r['Milestone'];
+    return r['MILESTONE'] || r['Task'] || r['Activity'];
   }).map(function(r) {
-    var task     = r['Task'] || r['Activity'] || r['Workstream'] || r['Milestone'] || '';
-    var owner    = r['Owner'] || r['Responsible'] || r['DRI'] || '';
-    var startRaw = r['Start Date'] || r['Start'] || '';
-    var endRaw   = r['End Date'] || r['Due Date'] || r['Target Date'] || r['End'] || '';
-    var status   = normalizeStatus(r['Status'] || '');
-    var workstream = r['Workstream'] || r['Stream'] || r['Category'] || '';
-    var due      = parseDate(endRaw);
-    var daysLeft = due ? Math.round((due - today) / 86400000) : null;
+    var task      = r['MILESTONE'] || r['Task'] || r['Activity'] || '';
+    var owner     = r['RESPONSIBLE'] || r['OWNER(S)'] || r['Owner'] || r['DRI'] || '';
+    var startRaw  = r['START'] || r['Start Date'] || r['Start'] || '';
+    var endRaw    = r['END'] || r['End Date'] || r['Due Date'] || r['Target Date'] || '';
+    var status    = normalizeStatus(r['STATUS'] || r['Status'] || '');
+    var workstream = r['DEPENDENCIES'] || r['Workstream'] || '';
+    var due       = parseDate(endRaw);
+    var daysLeft  = due ? Math.round((due - today) / 86400000) : null;
     return {
       task:       task,
       workstream: workstream,
@@ -106,7 +106,7 @@ function getWorkback(ss) {
       dueDateISO: due ? Utilities.formatDate(due, 'UTC', 'yyyy-MM-dd') : '',
       status:     status,
       daysLeft:   daysLeft,
-      notes:      r['Notes'] || r['Comments'] || '',
+      notes:      r['Comments'] || r['Notes'] || '',
     };
   });
 }
@@ -118,14 +118,16 @@ function getRaid(ss) {
   var rows = sheetToObjects(sheet);
 
   return rows.filter(function(r) {
-    return r['Title'] || r['Risk'] || r['Issue'] || r['Description'] || r['Item'];
+    return r['Description'] || r['Title'] || r['Risk'] || r['Issue'];
   }).map(function(r) {
-    var title    = r['Title'] || r['Risk'] || r['Issue'] || r['Item'] || r['Description'] || '';
-    var type     = r['Type'] || r['Category'] || 'Risk';
-    var severity = r['Severity'] || r['Impact'] || r['Priority'] || '';
-    var status   = normalizeStatus(r['Status'] || 'Open');
-    var owner    = r['Owner'] || r['Responsible'] || '';
-    var notes    = r['Notes'] || r['Mitigation'] || r['Response'] || r['Description'] || '';
+    var title    = r['Description'] || r['Title'] || r['Risk'] || r['Issue'] || '';
+    var type     = r['RAID Category'] || r['Type'] || r['Category'] || 'Action';
+    var severity = r['Priority'] || r['Severity'] || r['Impact'] || '';
+    // Derive status from Date Closed field
+    var closed   = r['Date Closed'] || '';
+    var status   = (closed && String(closed).trim() !== '') ? 'CLOSED' : 'OPEN';
+    var owner    = r['Owner'] || r['Responsible'] || r['Decision Maker'] || '';
+    var notes    = r['Next Step'] || r['Notes'] || r['Mitigation'] || '';
     return {
       title:    title,
       type:     type,
@@ -137,22 +139,35 @@ function getRaid(ss) {
   });
 }
 
-// ---- Program Team (sourced from R&R tab) ----
+// ---- Program Team (sourced from Roles and Responsibilities tab) ----
+// Columns: Abbreviation | Group | Group Leader(s)
 function getTeam(ss) {
-  var sheet = getSheet(ss, TAB.TEAM) || getSheet(ss, TAB.ROLES);
+  var sheet = getSheet(ss, TAB.ROLES) || getSheet(ss, TAB.TEAM);
   if (!sheet) return [];
   var rows = sheetToObjects(sheet);
 
-  return rows.filter(function(r) {
-    return r['Name'] || r['Full Name'] || r['Employee'] || r['Resource'] || r['Person'];
-  }).map(function(r) {
-    return {
-      name:  r['Name'] || r['Full Name'] || r['Employee'] || r['Resource'] || r['Person'] || '',
-      role:  r['Role'] || r['Title'] || r['Function'] || r['Responsibilities'] || r['Responsibility'] || '',
-      email: r['Email'] || r['Email Address'] || r['Contact'] || '',
-      team:  r['Team'] || r['Department'] || r['Workstream'] || r['Stream'] || r['Area'] || '',
-    };
+  var members = [];
+  rows.filter(function(r) {
+    return r['Group'] || r['Group Leader(s)'];
+  }).forEach(function(r) {
+    var group  = String(r['Group'] || '').trim();
+    var abbr   = String(r['Abbreviation'] || '').trim();
+    var leaders = String(r['Group Leader(s)'] || '').trim();
+    if (!leaders) return;
+    // Each comma/newline-separated leader becomes their own card
+    leaders.split(/[,\n]+/).forEach(function(name) {
+      name = name.trim();
+      if (name) {
+        members.push({
+          name:  name,
+          role:  group,
+          email: '',
+          team:  abbr,
+        });
+      }
+    });
   });
+  return members;
 }
 
 // ---- Summary stats for the hero section ----
