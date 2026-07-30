@@ -5,19 +5,16 @@
 
 var SHEET_ID = '1tiP3qFDvK_MZgnZpHK-CEkRSO1X-ist-84EmQKIekxw';
 
-// Tab names — must match the actual sheet tab labels exactly (fuzzy-matched below)
+// Tab names — must match actual sheet tab labels (fuzzy-matched below)
 var TAB = {
-  GOVERNANCE:   'Governace Calendar',
   WORKBACK_27:  'Workback Plan 2027 - July v1',
-  WORKBACK_26:  'Workback_Plan_2026_v2',
+  WORKBACK_26:  'Workback Plan 2026 v2',
   RAID_LOG:     'RAID Log',
-  RAID_SUMMARY: 'RAID_Summary',
+  RAID_SUMMARY: 'RAID Summary',
   TEAM:         'R&R',
-  ROLES:        'Roles_and_Responsibilities',
+  ROLES:        'Roles and Responsibilities',
 };
 
-// Script Properties key for the Google Chat webhook URL.
-// Set via: File → Project properties → Script properties → CHAT_WEBHOOK_URL
 var CHAT_WEBHOOK_PROP = 'CHAT_WEBHOOK_URL';
 
 // ---- Web app entry point ----
@@ -35,7 +32,6 @@ function getPortalData() {
   try {
     var ss = SpreadsheetApp.openById(SHEET_ID);
     return {
-      milestones:  getMilestones(ss),
       workback:    getWorkback(ss),
       raid:        getRaid(ss),
       team:        getTeam(ss),
@@ -45,40 +41,12 @@ function getPortalData() {
     };
   } catch (e) {
     Logger.log('getPortalData error: ' + e);
-    return { error: e.toString(), milestones: [], workback: [], raid: [], team: [] };
+    return { error: e.toString(), workback: [], raid: [], team: [] };
   }
 }
 
-// ---- Governance Calendar: key milestones ----
-function getMilestones(ss) {
-  var sheet = getSheet(ss, TAB.GOVERNANCE);
-  if (!sheet) return [];
-  var rows = sheetToObjects(sheet);
-  var today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  return rows.filter(function(r) {
-    return r['Milestone'] || r['Task'] || r['Activity'];
-  }).map(function(r) {
-    var name    = r['Milestone'] || r['Task'] || r['Activity'] || '';
-    var owner   = r['Owner'] || r['Responsible'] || '';
-    var dueRaw  = r['Target Date'] || r['Due Date'] || r['Date'] || '';
-    var status  = normalizeStatus(r['Status'] || '');
-    var due     = parseDate(dueRaw);
-    var daysLeft = due ? Math.round((due - today) / 86400000) : null;
-    return {
-      name:       name,
-      owner:      owner,
-      dueDate:    due ? formatDate(due) : dueRaw,
-      dueDateISO: due ? Utilities.formatDate(due, 'UTC', 'yyyy-MM-dd') : '',
-      status:     status,
-      daysLeft:   daysLeft,
-      notes:      r['Notes'] || r['Comments'] || '',
-    };
-  });
-}
-
 // ---- Workback Plan 2027 ----
+// Columns: MILESTONE | DEPENDENCIES | RESPONSIBLE | OWNER(S) | STATUS | START | END | Duration | Comments | | Executive Approvals
 function getWorkback(ss) {
   var sheet = getSheet(ss, TAB.WORKBACK_27) || getSheet(ss, TAB.WORKBACK_26);
   if (!sheet) return [];
@@ -89,14 +57,14 @@ function getWorkback(ss) {
   return rows.filter(function(r) {
     return r['MILESTONE'] || r['Task'] || r['Activity'];
   }).map(function(r) {
-    var task      = r['MILESTONE'] || r['Task'] || r['Activity'] || '';
-    var owner     = r['RESPONSIBLE'] || r['OWNER(S)'] || r['Owner'] || r['DRI'] || '';
-    var startRaw  = r['START'] || r['Start Date'] || r['Start'] || '';
-    var endRaw    = r['END'] || r['End Date'] || r['Due Date'] || r['Target Date'] || '';
-    var status    = normalizeStatus(r['STATUS'] || r['Status'] || '');
+    var task       = r['MILESTONE'] || r['Task'] || r['Activity'] || '';
+    var owner      = r['RESPONSIBLE'] || r['OWNER(S)'] || r['Owner'] || r['DRI'] || '';
+    var startRaw   = r['START'] || r['Start Date'] || r['Start'] || '';
+    var endRaw     = r['END'] || r['End Date'] || r['Due Date'] || r['Target Date'] || '';
+    var status     = normalizeStatus(r['STATUS'] || r['Status'] || '');
     var workstream = r['DEPENDENCIES'] || r['Workstream'] || '';
-    var due       = parseDate(endRaw);
-    var daysLeft  = due ? Math.round((due - today) / 86400000) : null;
+    var due        = parseDate(endRaw);
+    var daysLeft   = due ? Math.round((due - today) / 86400000) : null;
     return {
       task:       task,
       workstream: workstream,
@@ -112,6 +80,7 @@ function getWorkback(ss) {
 }
 
 // ---- RAID Log ----
+// Columns: Identifier | RAID Category | Impacted Team | Description | Priority | Date Identified | Created by | Next Step | Due Date for Next Step | Date Closed | Owner | Decision Maker
 function getRaid(ss) {
   var sheet = getSheet(ss, TAB.RAID_LOG) || getSheet(ss, TAB.RAID_SUMMARY);
   if (!sheet) return [];
@@ -123,7 +92,6 @@ function getRaid(ss) {
     var title    = r['Description'] || r['Title'] || r['Risk'] || r['Issue'] || '';
     var type     = r['RAID Category'] || r['Type'] || r['Category'] || 'Action';
     var severity = r['Priority'] || r['Severity'] || r['Impact'] || '';
-    // Derive status from Date Closed field
     var closed   = r['Date Closed'] || '';
     var status   = (closed && String(closed).trim() !== '') ? 'CLOSED' : 'OPEN';
     var owner    = r['Owner'] || r['Responsible'] || r['Decision Maker'] || '';
@@ -139,7 +107,7 @@ function getRaid(ss) {
   });
 }
 
-// ---- Program Team (sourced from Roles and Responsibilities tab) ----
+// ---- Program Team (Roles and Responsibilities tab) ----
 // Columns: Abbreviation | Group | Group Leader(s)
 function getTeam(ss) {
   var sheet = getSheet(ss, TAB.ROLES) || getSheet(ss, TAB.TEAM);
@@ -150,53 +118,119 @@ function getTeam(ss) {
   rows.filter(function(r) {
     return r['Group'] || r['Group Leader(s)'];
   }).forEach(function(r) {
-    var group  = String(r['Group'] || '').trim();
-    var abbr   = String(r['Abbreviation'] || '').trim();
+    var group   = String(r['Group'] || '').trim();
+    var abbr    = String(r['Abbreviation'] || '').trim();
     var leaders = String(r['Group Leader(s)'] || '').trim();
     if (!leaders) return;
-    // Each comma/newline-separated leader becomes their own card
     leaders.split(/[,\n]+/).forEach(function(name) {
       name = name.trim();
-      if (name) {
-        members.push({
-          name:  name,
-          role:  group,
-          email: '',
-          team:  abbr,
-        });
-      }
+      if (name) members.push({ name: name, role: group, email: '', team: abbr });
     });
   });
   return members;
 }
 
-// ---- Summary stats for the hero section ----
+// ---- Summary stats (workback-based) ----
 function getSummaryStats(ss) {
-  var milestones = getMilestones(ss);
-  var workback   = getWorkback(ss);
-  var raid       = getRaid(ss);
-  var today      = new Date(); today.setHours(0,0,0,0);
-
-  var totalM   = milestones.length;
-  var doneM    = milestones.filter(function(m){ return m.status === 'COMPLETE'; }).length;
-  var overdueM = milestones.filter(function(m){
-    return m.daysLeft !== null && m.daysLeft < 0 && m.status !== 'COMPLETE';
-  }).length;
+  var workback = getWorkback(ss);
+  var raid     = getRaid(ss);
 
   var totalW   = workback.length;
-  var doneW    = workback.filter(function(w){ return w.status === 'COMPLETE'; }).length;
-
-  var openRaid = raid.filter(function(r){ return r.status !== 'CLOSED' && r.status !== 'COMPLETE'; }).length;
+  var doneW    = workback.filter(function(w) { return w.status === 'COMPLETE'; }).length;
+  var overdueW = workback.filter(function(w) {
+    return w.daysLeft !== null && w.daysLeft < 0 && w.status !== 'COMPLETE';
+  }).length;
+  var openRaid = raid.filter(function(r) { return r.status !== 'CLOSED'; }).length;
 
   return {
-    milestonesTotal:    totalM,
-    milestonesComplete: doneM,
-    milestonesOverdue:  overdueM,
-    workbackTotal:      totalW,
-    workbackComplete:   doneW,
-    openRaidItems:      openRaid,
-    pctComplete:        totalM > 0 ? Math.round(doneM / totalM * 100) : 0,
+    workbackTotal:    totalW,
+    workbackComplete: doneW,
+    workbackOverdue:  overdueW,
+    openRaidItems:    openRaid,
+    pctComplete:      totalW > 0 ? Math.round(doneW / totalW * 100) : 0,
   };
+}
+
+// ---- Add new RAID item (appends row to RAID Log tab) ----
+function addRaidItem(item) {
+  try {
+    var ss    = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = getSheet(ss, TAB.RAID_LOG);
+    if (!sheet) return { success: false, error: 'RAID Log tab not found' };
+
+    var nextId = sheet.getLastRow();
+    var user   = '';
+    try { user = Session.getActiveUser().getEmail(); } catch(e) {}
+
+    // Columns: Identifier | RAID Category | Impacted Team | Description | Priority |
+    //          Date Identified | Created by | Next Step | Due Date for Next Step |
+    //          Date Closed | Owner | Decision Maker
+    sheet.appendRow([
+      nextId,
+      item.raidCategory || '',
+      item.impactedTeam || '',
+      item.description  || '',
+      item.priority     || '',
+      new Date(),
+      user,
+      item.nextStep     || '',
+      '',
+      '',
+      item.owner        || '',
+      '',
+    ]);
+
+    sendChatNotification(
+      '🔴 *New RAID Item Added*\n' +
+      '*' + (item.description || '') + '*\n' +
+      'Category: ' + (item.raidCategory || '—') + '  |  ' +
+      'Priority: ' + (item.priority || '—') + '  |  ' +
+      'Owner: ' + (item.owner || '—') + '\n' +
+      'Next step: ' + (item.nextStep || '—')
+    );
+
+    return { success: true };
+  } catch (e) {
+    Logger.log('addRaidItem error: ' + e);
+    return { success: false, error: e.toString() };
+  }
+}
+
+// ---- Add new milestone (appends row to Workback Plan 2027 tab) ----
+function addMilestone(item) {
+  try {
+    var ss    = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = getSheet(ss, TAB.WORKBACK_27);
+    if (!sheet) return { success: false, error: 'Workback Plan 2027 tab not found' };
+
+    // Columns: MILESTONE | DEPENDENCIES | RESPONSIBLE | OWNER(S) | STATUS | START | END | Duration | Comments | | Executive Approvals
+    sheet.appendRow([
+      item.milestone    || '',
+      item.dependencies || '',
+      item.responsible  || '',
+      item.owners       || '',
+      item.status       || 'PENDING',
+      item.start        || '',
+      item.end          || '',
+      '',
+      item.comments     || '',
+      '',
+      '',
+    ]);
+
+    sendChatNotification(
+      '📌 *New Milestone Added*\n' +
+      '*' + (item.milestone || '') + '*\n' +
+      'Due: ' + (item.end || '—') + '  |  ' +
+      'Owner: ' + (item.responsible || item.owners || '—') + '  |  ' +
+      'Status: ' + (item.status || 'PENDING')
+    );
+
+    return { success: true };
+  } catch (e) {
+    Logger.log('addMilestone error: ' + e);
+    return { success: false, error: e.toString() };
+  }
 }
 
 // ---- Google Chat webhook notification ----
@@ -208,14 +242,12 @@ function sendChatNotification(message) {
     return { success: false, error: 'Webhook URL not configured' };
   }
   try {
-    var payload = JSON.stringify({ text: message });
-    var options = {
+    var response = UrlFetchApp.fetch(url, {
       method: 'post',
       contentType: 'application/json',
-      payload: payload,
+      payload: JSON.stringify({ text: message }),
       muteHttpExceptions: true,
-    };
-    var response = UrlFetchApp.fetch(url, options);
+    });
     return { success: response.getResponseCode() === 200 };
   } catch (e) {
     Logger.log('sendChatNotification error: ' + e);
@@ -223,56 +255,29 @@ function sendChatNotification(message) {
   }
 }
 
-// ---- Daily trigger: check for overdue milestones ----
-function checkMilestones() {
+// ---- Daily trigger: alert on overdue workback items ----
+function checkOverdueItems() {
   var ss    = SpreadsheetApp.openById(SHEET_ID);
-  var items = getMilestones(ss).filter(function(m) {
-    return m.daysLeft !== null && m.daysLeft < 0 && m.status !== 'COMPLETE';
+  var items = getWorkback(ss).filter(function(w) {
+    return w.daysLeft !== null && w.daysLeft < 0 && w.status !== 'COMPLETE';
   });
   if (!items.length) return;
 
-  var lines = items.map(function(m) {
-    return '• *' + m.name + '* — ' + Math.abs(m.daysLeft) + ' day(s) overdue (Owner: ' + (m.owner || 'TBD') + ')';
+  var lines = items.map(function(w) {
+    return '• *' + w.task + '* — ' + Math.abs(w.daysLeft) + ' day(s) overdue (Owner: ' + (w.owner || 'TBD') + ')';
   });
-  var msg = '⚠️ *2027 IPP Portal — Overdue Milestone Alert*\n\n' + lines.join('\n') +
-    '\n\nReview: ' + getPortalUrl();
-  sendChatNotification(msg);
+  sendChatNotification(
+    '⚠️ *2027 IPP Portal — Overdue Items*\n\n' + lines.join('\n') +
+    '\n\nReview: ' + getPortalUrl()
+  );
 }
 
-// ---- Debug: run this from the Apps Script editor to see tab names and headers ----
-function debugSheetInfo() {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var result = { allTabs: [], targets: {} };
-
-  // List every tab name
-  result.allTabs = ss.getSheets().map(function(s) { return s.getName(); });
-
-  // For each target tab, show the first 5 rows so we can see past title rows
-  Object.keys(TAB).forEach(function(key) {
-    var sheet = getSheet(ss, TAB[key]);
-    if (sheet) {
-      var numRows = Math.min(5, sheet.getLastRow());
-      var numCols = Math.min(12, sheet.getLastColumn());
-      var rows = sheet.getRange(1, 1, numRows, numCols).getValues();
-      result.targets[key] = { found: sheet.getName(), first5rows: rows };
-    } else {
-      result.targets[key] = { found: null, looking_for: TAB[key] };
-    }
-  });
-
-  Logger.log(JSON.stringify(result, null, 2));
-  return result;
-}
-
-// ---- Install / remove daily time-driven trigger ----
+// ---- Install daily trigger ----
 function installDailyTrigger() {
-  deleteTriggers('checkMilestones');
-  ScriptApp.newTrigger('checkMilestones')
-    .timeBased()
-    .everyDays(1)
-    .atHour(8)
-    .create();
-  Logger.log('Daily trigger installed for checkMilestones at 8am');
+  deleteTriggers('checkOverdueItems');
+  ScriptApp.newTrigger('checkOverdueItems')
+    .timeBased().everyDays(1).atHour(8).create();
+  Logger.log('Daily trigger installed for checkOverdueItems at 8am');
 }
 
 function deleteTriggers(functionName) {
@@ -284,20 +289,37 @@ function deleteTriggers(functionName) {
 // ---- Admin check ----
 function isAdminUser() {
   try {
-    var email = Session.getActiveUser().getEmail();
-    var props = PropertiesService.getScriptProperties();
-    var admins = (props.getProperty('ADMIN_EMAILS') || '').split(',').map(function(e) { return e.trim().toLowerCase(); });
+    var email  = Session.getActiveUser().getEmail();
+    var admins = (PropertiesService.getScriptProperties().getProperty('ADMIN_EMAILS') || '')
+                   .split(',').map(function(e) { return e.trim().toLowerCase(); });
     return admins.indexOf(email.toLowerCase()) > -1;
   } catch (e) {
     return false;
   }
 }
 
+// ---- Debug: lists all tab names and first 5 rows of each target tab ----
+function debugSheetInfo() {
+  var ss     = SpreadsheetApp.openById(SHEET_ID);
+  var result = { allTabs: ss.getSheets().map(function(s) { return s.getName(); }), targets: {} };
+  Object.keys(TAB).forEach(function(key) {
+    var sheet = getSheet(ss, TAB[key]);
+    if (sheet) {
+      var numRows = Math.min(5, sheet.getLastRow());
+      var numCols = Math.min(12, sheet.getLastColumn());
+      result.targets[key] = { found: sheet.getName(), first5rows: sheet.getRange(1, 1, numRows, numCols).getValues() };
+    } else {
+      result.targets[key] = { found: null, looking_for: TAB[key] };
+    }
+  });
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
 // ---- Helpers ----
 function getSheet(ss, name) {
   var sheet = ss.getSheetByName(name);
   if (!sheet) {
-    // Fuzzy match: strip all non-alphanumeric chars and compare lowercase
     var slug = name.replace(/[^a-z0-9]/gi, '').toLowerCase();
     ss.getSheets().forEach(function(s) {
       if (!sheet && s.getName().replace(/[^a-z0-9]/gi, '').toLowerCase() === slug) sheet = s;
@@ -309,16 +331,13 @@ function getSheet(ss, name) {
 function sheetToObjects(sheet) {
   var data = sheet.getDataRange().getValues();
   if (data.length < 2) return [];
-
-  // Skip title/merged rows — find first row with at least 2 non-empty cells
+  // Skip title rows — find first row with at least 2 non-empty cells
   var headerIdx = 0;
   for (var i = 0; i < Math.min(data.length, 10); i++) {
-    var nonEmpty = data[i].filter(function(c) {
-      return c !== '' && c !== null && c !== undefined;
-    }).length;
-    if (nonEmpty >= 2) { headerIdx = i; break; }
+    if (data[i].filter(function(c) { return c !== '' && c !== null && c !== undefined; }).length >= 2) {
+      headerIdx = i; break;
+    }
   }
-
   var headers = data[headerIdx].map(function(h) { return String(h).trim(); });
   return data.slice(headerIdx + 1).map(function(row) {
     var obj = {};
@@ -354,9 +373,5 @@ function formatDate(d) {
 }
 
 function getPortalUrl() {
-  try {
-    return ScriptApp.getService().getUrl();
-  } catch (e) {
-    return 'https://script.google.com';
-  }
+  try { return ScriptApp.getService().getUrl(); } catch(e) { return 'https://script.google.com'; }
 }

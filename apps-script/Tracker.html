@@ -386,6 +386,39 @@
       .cal-cell { min-height: 60px; padding: 4px; }
       .cal-event { font-size: 9px; }
     }
+
+    /* ---- Modal ---- */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(43,22,63,0.45);
+      backdrop-filter: blur(4px); z-index: 200;
+      display: none; align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: #fff; border-radius: 20px; padding: 36px; width: 100%;
+      max-width: 480px; max-height: 90vh; overflow-y: auto;
+      box-shadow: 0 24px 80px rgba(43,22,63,0.22);
+      animation: modalIn .3s var(--ease);
+    }
+    @keyframes modalIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+    .modal-title { font-size: 20px; font-weight: 800; color: var(--purple); letter-spacing: -0.02em; margin-bottom: 24px; }
+    .form-group { margin-bottom: 18px; }
+    .form-label {
+      display: block; font-size: 12px; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: rgba(43,22,63,0.55); margin-bottom: 6px;
+    }
+    .form-input, .form-select, .form-textarea {
+      width: 100%; padding: 10px 14px; border: 1px solid rgba(75,40,109,0.2);
+      border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 14px;
+      color: var(--dark); background: #fff;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      outline: none; border-color: var(--purple);
+      box-shadow: 0 0 0 3px rgba(75,40,109,0.10);
+    }
+    .form-textarea { resize: vertical; min-height: 80px; }
+    .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 28px; }
   </style>
 </head>
 <body>
@@ -403,6 +436,18 @@
 
 <main id="app"></main>
 <div id="toastContainer"></div>
+
+<!-- Modal overlay -->
+<div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+  <div class="modal-box">
+    <div class="modal-title" id="modalTitle"></div>
+    <div id="modalForm"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-sm" id="modalSubmit" onclick="submitModal()">Save</button>
+    </div>
+  </div>
+</div>
 
 <footer>
   <div class="foot-left">2027 IPP Portal — Enterprise & Public Business</div>
@@ -429,38 +474,32 @@
 
     var pct = s.pctComplete || 0;
     var heroStats =
-      hstat(pct + '%', 'Milestones Complete') +
-      hstat(s.milestonesTotal || 0, 'Total Milestones') +
-      hstats(s.milestonesOverdue || 0, 'Overdue', s.milestonesOverdue > 0 ? 'danger' : '') +
+      hstat(pct + '%', 'Tasks Complete') +
+      hstat(s.workbackTotal || 0, 'Total Tasks') +
+      hstats(s.workbackOverdue || 0, 'Overdue', s.workbackOverdue > 0 ? 'danger' : '') +
       hstat(s.openRaidItems || 0, 'Open RAID Items');
 
-    var milestones = DATA.milestones || [];
     var keyMilestones = [
-      { name: 'Data Analysis Ready',   date: 'Aug 13, 2026' },
-      { name: 'VP Leadership Review',  date: 'Aug 20, 2026' },
-      { name: 'Final Decision',        date: 'Aug 27, 2026' },
-      { name: 'Incentives Team Ready', date: 'Sep 2026'     },
-      { name: 'Implementation',        date: 'Mid-Dec 2026' },
+      { name: 'Data Analysis Ready',   date: 'Aug 13, 2026', iso: '2026-08-13' },
+      { name: 'VP Leadership Review',  date: 'Aug 20, 2026', iso: '2026-08-20' },
+      { name: 'Final Decision',        date: 'Aug 27, 2026', iso: '2026-08-27' },
+      { name: 'Incentives Team Ready', date: 'Sep 2026',     iso: '2026-09-01' },
+      { name: 'Implementation',        date: 'Mid-Dec 2026', iso: '2026-12-15' },
     ];
 
-    // Map key milestones to status from data
-    var track = keyMilestones.map(function(km) {
-      var match = milestones.filter(function(m) {
-        return m.name && m.name.toLowerCase().indexOf(km.name.toLowerCase().slice(0, 12)) > -1;
-      })[0] || {};
-      var status = match.status || 'PENDING';
-      var cls = status === 'COMPLETE' ? 'done' : (status === 'IN PROGRESS' ? 'active' : '');
-      var icon = status === 'COMPLETE' ? '✓' : (status === 'IN PROGRESS' ? '●' : '');
+    var now = new Date(); now.setHours(0, 0, 0, 0);
+    var track = keyMilestones.map(function(km, idx) {
+      var d = new Date(km.iso);
+      var isPast = d <= now;
+      var isNext = !isPast && (idx === 0 || new Date(keyMilestones[idx - 1].iso) <= now);
+      var cls = isPast ? 'done' : (isNext ? 'active' : '');
+      var icon = isPast ? '✓' : (isNext ? '●' : String(idx + 1));
       return '<div class="pt-step ' + cls + '">' +
         '<div class="pt-circle">' + esc(icon) + '</div>' +
         '<div class="pt-label">' + esc(km.name) + '</div>' +
         '<div class="pt-date">' + esc(km.date) + '</div>' +
         '</div>';
     }).join('');
-
-    var cards = milestones.length
-      ? milestones.map(renderMilestoneCard).join('')
-      : '<div class="empty">No milestones loaded. Check that the Governance_Calendar tab exists in the source sheet.</div>';
 
     var adminPanel = isAdmin
       ? '<div class="admin-bar"><div class="admin-label">Admin</div>' +
@@ -481,25 +520,8 @@
           '<div class="eyebrow">Program Milestones</div>' +
           '<h2 class="section-title">Key Milestones</h2>' +
           '<div class="progress-track">' + track + '</div>' +
-          '<div class="card-grid">' + cards + '</div>' +
         '</div>' +
       '</div></div>';
-  }
-
-  function renderMilestoneCard(m) {
-    var dc = daysChip(m.daysLeft, m.status);
-    return '<div class="card">' +
-      '<div class="card-head">' +
-        '<div class="card-title">' + esc(m.name) + '</div>' +
-        '<span class="badge ' + badgeCls(m.status) + '">' + esc(m.status) + '</span>' +
-      '</div>' +
-      (m.owner ? '<div class="card-owner">👤 ' + esc(m.owner) + '</div>' : '') +
-      (m.notes ? '<div class="card-notes">' + esc(m.notes) + '</div>' : '') +
-      '<div class="card-footer">' +
-        '<span class="card-meta">📅 ' + esc(m.dueDate || 'TBD') + '</span>' +
-        (dc || '') +
-      '</div>' +
-    '</div>';
   }
 
   // ---- Calendar state ----
@@ -516,12 +538,15 @@
       '<div class="wrap">' +
         '<div class="section">' +
           '<div class="eyebrow">Program Schedule</div>' +
-          '<h2 class="section-title">Calendar</h2>' +
-          '<p class="section-lead">Milestones and workback tasks plotted by due date. Navigate months with the arrows.</p>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+            '<h2 class="section-title" style="margin-bottom:0">Calendar</h2>' +
+            '<button class="btn btn-sm" onclick="openModal(\'calendar\')">&#xff0b; Add Item</button>' +
+          '</div>' +
+          '<p class="section-lead">Workback tasks plotted by due date. Navigate months with the arrows.</p>' +
           '<div class="cal-legend">' +
-            '<div class="cal-legend-item"><div class="cal-legend-dot" style="background:rgba(75,40,109,0.25)"></div> Milestone</div>' +
             '<div class="cal-legend-item"><div class="cal-legend-dot" style="background:rgba(43,128,0,0.25)"></div> Complete</div>' +
             '<div class="cal-legend-item"><div class="cal-legend-dot" style="background:rgba(192,57,43,0.2)"></div> Overdue</div>' +
+            '<div class="cal-legend-item"><div class="cal-legend-dot" style="background:rgba(179,107,0,0.2)"></div> At Risk</div>' +
             '<div class="cal-legend-item"><div class="cal-legend-dot" style="background:rgba(43,22,63,0.12)"></div> Workback task</div>' +
           '</div>' +
           '<div id="calWrap">' + calGrid() + '</div>' +
@@ -544,10 +569,6 @@
       evIndex[key] = evIndex[key] || [];
       evIndex[key].push(ev);
     }
-    (DATA.milestones || []).forEach(function(m) {
-      var iso = m.dueDateISO || isoFromFormatted(m.dueDate);
-      addEv(iso, { label: m.name, type: 'milestone', status: m.status });
-    });
     (DATA.workback || []).forEach(function(w) {
       var iso = w.dueDateISO || isoFromFormatted(w.dueDate);
       addEv(iso, { label: w.task, type: 'workback', status: w.status });
@@ -591,11 +612,8 @@
       var evs = evIndex[cellISO] || [];
       var MAX_SHOW = 3;
       var evHtml = evs.slice(0, MAX_SHOW).map(function(ev) {
-        var stCls = '';
-        if (ev.type === 'milestone') {
-          stCls = ev.status === 'COMPLETE' ? ' complete' : ev.status === 'OVERDUE' ? ' overdue' : ev.status === 'AT RISK' ? ' at-risk' : '';
-        }
-        return '<span class="cal-event ' + ev.type + stCls + '" title="' + esc(ev.label) + '">' + esc(ev.label) + '</span>';
+        var stCls = ev.status === 'COMPLETE' ? ' complete' : ev.status === 'OVERDUE' ? ' overdue' : ev.status === 'AT RISK' ? ' at-risk' : '';
+        return '<span class="cal-event milestone' + stCls + '" title="' + esc(ev.label) + '">' + esc(ev.label) + '</span>';
       }).join('');
       if (evs.length > MAX_SHOW) {
         evHtml += '<span class="cal-event more">+' + (evs.length - MAX_SHOW) + ' more</span>';
@@ -648,7 +666,10 @@
       '<div class="wrap">' +
         '<div class="section">' +
           '<div class="eyebrow">Planning Schedule</div>' +
-          '<h2 class="section-title">Workback Plan — 2027</h2>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+            '<h2 class="section-title" style="margin-bottom:0">Workback Plan — 2027</h2>' +
+            '<button class="btn btn-sm" onclick="openModal(\'milestone\')">&#xff0b; Add Milestone</button>' +
+          '</div>' +
           '<p class="section-lead">Task-level schedule pulled from the 2027 workback sheet. Rows highlighted in red are past due.</p>' +
           '<div class="table-wrap"><table class="data">' +
             '<thead><tr><th>Task</th><th>Workstream</th><th>Owner</th><th>Due Date</th><th>Days</th><th>Status</th><th>Notes</th></tr></thead>' +
@@ -699,7 +720,10 @@
       '<div class="wrap">' +
         '<div class="section">' +
           '<div class="eyebrow">Risk Management</div>' +
-          '<h2 class="section-title">RAID Log</h2>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+            '<h2 class="section-title" style="margin-bottom:0">RAID Log</h2>' +
+            '<button class="btn btn-sm" onclick="openModal(\'raid\')">&#xff0b; Add RAID Item</button>' +
+          '</div>' +
           '<p class="section-lead">Risks, Assumptions, Issues, and Dependencies tracked for the 2027 IPP program. Click a category to expand.</p>' +
           sections +
         '</div>' +
@@ -789,8 +813,8 @@
     btn.innerHTML = '<span class="spin">●</span> Sending…';
     var s = DATA.summary || {};
     var msg = '📊 *2027 IPP Portal — Status Update*\n\n' +
-      '• Milestones complete: ' + (s.pctComplete || 0) + '% (' + (s.milestonesComplete || 0) + '/' + (s.milestonesTotal || 0) + ')\n' +
-      '• Overdue items: ' + (s.milestonesOverdue || 0) + '\n' +
+      '• Tasks complete: ' + (s.pctComplete || 0) + '% (' + (s.workbackComplete || 0) + '/' + (s.workbackTotal || 0) + ')\n' +
+      '• Overdue items: ' + (s.workbackOverdue || 0) + '\n' +
       '• Open RAID items: ' + (s.openRaidItems || 0);
     google.script.run
       .withSuccessHandler(function(result) {
@@ -870,6 +894,110 @@
   function renderAll() {
     var app = document.getElementById('app');
     app.innerHTML = renderOverview() + renderCalendar() + renderWorkback() + renderRaid() + renderTeam();
+  }
+
+  // ---- Modal ----
+  var _modalType = '';
+
+  function openModal(type) {
+    _modalType = type;
+    var title = document.getElementById('modalTitle');
+    var form  = document.getElementById('modalForm');
+
+    if (type === 'raid') {
+      title.textContent = 'Add RAID Item';
+      form.innerHTML =
+        fg('Description', '<textarea class="form-textarea" id="f_description" required placeholder="Describe the risk, action, issue or decision…"></textarea>') +
+        fg('RAID Category', '<select class="form-select" id="f_raidCategory"><option>Action</option><option>Risk</option><option>Issue</option><option>Decision</option></select>') +
+        fg('Priority', '<select class="form-select" id="f_priority"><option>High</option><option>Critical</option><option>Moderate</option><option>Low</option></select>') +
+        fg('Owner', '<input class="form-input" id="f_owner" type="text" placeholder="Name or team">') +
+        fg('Impacted Team', '<input class="form-input" id="f_impactedTeam" type="text" placeholder="Which team is affected?">') +
+        fg('Next Step', '<input class="form-input" id="f_nextStep" type="text" placeholder="Immediate action required">');
+    } else {
+      title.textContent = type === 'milestone' ? 'Add Milestone' : 'Add Calendar Item';
+      form.innerHTML =
+        fg('Milestone / Task', '<input class="form-input" id="f_milestone" type="text" required placeholder="Name this milestone or task">') +
+        fg('Responsible', '<input class="form-input" id="f_responsible" type="text" placeholder="Primary responsible party">') +
+        fg('Owner(s)', '<input class="form-input" id="f_owners" type="text" placeholder="Additional owners">') +
+        fg('Start Date', '<input class="form-input" id="f_start" type="date">') +
+        fg('End Date', '<input class="form-input" id="f_end" type="date" required>') +
+        fg('Status', '<select class="form-select" id="f_status"><option>PENDING</option><option>IN PROGRESS</option><option>COMPLETE</option><option>AT RISK</option></select>') +
+        fg('Comments', '<input class="form-input" id="f_comments" type="text" placeholder="Optional notes">');
+    }
+
+    document.getElementById('modalSubmit').disabled = false;
+    document.getElementById('modalSubmit').textContent = 'Save';
+    document.getElementById('modalOverlay').classList.add('open');
+    var first = form.querySelector('input, textarea, select');
+    if (first) setTimeout(function() { first.focus(); }, 80);
+  }
+
+  function fg(label, control) {
+    return '<div class="form-group"><label class="form-label">' + label + '</label>' + control + '</div>';
+  }
+
+  function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+    _modalType = '';
+  }
+
+  function handleOverlayClick(e) {
+    if (e.target === document.getElementById('modalOverlay')) closeModal();
+  }
+
+  function submitModal() {
+    var btn = document.getElementById('modalSubmit');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin">&#9679;</span> Saving…';
+
+    function onFail(err) {
+      btn.disabled = false;
+      btn.textContent = 'Save';
+      toast('Save failed: ' + err, 'error');
+    }
+
+    if (_modalType === 'raid') {
+      var desc = document.getElementById('f_description').value.trim();
+      if (!desc) { btn.disabled = false; btn.textContent = 'Save'; toast('Description is required', 'error'); return; }
+      google.script.run
+        .withSuccessHandler(function(result) {
+          btn.disabled = false;
+          btn.textContent = 'Save';
+          if (result && result.success) { closeModal(); toast('RAID item added ✓', 'success'); refresh(); }
+          else toast('Save failed: ' + (result && result.error || 'unknown'), 'error');
+        })
+        .withFailureHandler(onFail)
+        .addRaidItem({
+          description:  desc,
+          raidCategory: document.getElementById('f_raidCategory').value,
+          priority:     document.getElementById('f_priority').value,
+          owner:        document.getElementById('f_owner').value.trim(),
+          impactedTeam: document.getElementById('f_impactedTeam').value.trim(),
+          nextStep:     document.getElementById('f_nextStep').value.trim(),
+        });
+    } else {
+      var name = document.getElementById('f_milestone').value.trim();
+      var end  = document.getElementById('f_end').value;
+      if (!name) { btn.disabled = false; btn.textContent = 'Save'; toast('Milestone name is required', 'error'); return; }
+      if (!end)  { btn.disabled = false; btn.textContent = 'Save'; toast('End date is required', 'error'); return; }
+      google.script.run
+        .withSuccessHandler(function(result) {
+          btn.disabled = false;
+          btn.textContent = 'Save';
+          if (result && result.success) { closeModal(); toast('Milestone added ✓', 'success'); refresh(); }
+          else toast('Save failed: ' + (result && result.error || 'unknown'), 'error');
+        })
+        .withFailureHandler(onFail)
+        .addMilestone({
+          milestone:   name,
+          responsible: document.getElementById('f_responsible').value.trim(),
+          owners:      document.getElementById('f_owners').value.trim(),
+          start:       document.getElementById('f_start').value,
+          end:         end,
+          status:      document.getElementById('f_status').value,
+          comments:    document.getElementById('f_comments').value.trim(),
+        });
+    }
   }
 
   // ---- Init ----
