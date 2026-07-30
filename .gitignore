@@ -1,0 +1,14 @@
+# Credentials — never commit these
+.clasprc.json
+*.env
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# Node (if clasp is installed locally)
+node_modules/
+package-lock.json
