@@ -388,10 +388,11 @@
     }
 
     /* ---- Gantt chart ---- */
-    .gantt-wrap { overflow-x: auto; border: 1px solid rgba(75,40,109,0.12); border-radius: 14px; background: #fff; }
+    .gantt-wrap { border: 1px solid rgba(75,40,109,0.12); border-radius: 14px; background: #fff; overflow: hidden; }
+    .gantt-body-scroll { overflow: auto; max-height: 72vh; }
     .gantt-inner { min-width: 820px; }
     .gantt-head {
-      display: flex; position: sticky; top: 68px; z-index: 10;
+      display: flex; position: sticky; top: 0; z-index: 10;
       background: rgba(75,40,109,0.04);
       border-bottom: 2px solid rgba(75,40,109,0.15);
     }
@@ -442,19 +443,19 @@
     .gantt-legend { display: flex; gap: 16px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
     .gantt-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgba(43,22,63,0.6); }
     .gantt-legend-dot { width: 14px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    /* Gantt controls bar (legend + section pills) */
+    .gantt-controls { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+    .gantt-section-pills { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
     /* Gantt collapsible sections */
-    .gantt-sec-pill-row { cursor: pointer; border-bottom: 2px solid rgba(75,40,109,0.14) !important; }
-    .gantt-sec-pill-row:hover { background: rgba(75,40,109,0.02) !important; }
     .gantt-sec-pill {
       display: inline-flex; align-items: center; gap: 5px;
-      background: var(--purple); color: #fff;
+      background: var(--purple); color: #fff; border: none; cursor: pointer;
       border-radius: 999px; padding: 5px 14px 5px 9px;
       font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
-      max-width: 212px; overflow: hidden;
-      transition: background .2s var(--ease); flex-shrink: 0;
+      transition: background .2s var(--ease);
     }
-    .gantt-sec-pill-row:hover .gantt-sec-pill { background: var(--dark); }
-    .gantt-sec-pill span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gantt-sec-pill:hover { background: var(--dark); }
+    .gantt-sec-pill span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
     .gantt-sub-head { cursor: pointer; background: rgba(75,40,109,0.04); }
     .gantt-sub-head:hover { background: rgba(75,40,109,0.08); }
     .gantt-subsec-label { font-size: 12px; font-weight: 700; color: var(--dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -873,26 +874,32 @@
       }
     });
 
-    var secN = 0;
+    // Pre-assign IDs so pills (above chart) and section body divs share the same IDs
+    var _secN = 0;
+    tree.forEach(function(node) {
+      if (node.standalone) return;
+      _secN++;
+      node._secId = 'gss' + _secN;
+      var _subN = 0;
+      (node.subs || []).forEach(function(l1) { _subN++; l1._subId = node._secId + 'l' + _subN; });
+    });
 
-    // Render the tree
+    // Section pills rendered beside the legend
+    var pillsHtml = tree.filter(function(n) { return !n.standalone && n.it; }).map(function(node) {
+      return '<button class="gantt-sec-pill" data-body="' + node._secId + '" onclick="toggleGanttSec(\'' + node._secId + '\')">' +
+        chevSvg + '<span>' + esc(node.it.r.task) + '</span>' +
+      '</button>';
+    }).join('');
+
+    // Render tree — L0 rows removed, sections controlled by pills above
     var ganttBody = tree.map(function(node) {
       if (node.standalone) return taskRow(node.standalone);
 
-      secN++;
-      var secId = 'gss' + secN;
-
-      // All L2 tasks in this L0 section (for span)
-      var allTasks = [].concat(node.loose);
-      node.subs.forEach(function(l1) { allTasks = allTasks.concat(l1.tasks); });
-      var sp0 = spanOf(allTasks);
-
-      var subN = 0;
+      var secId = node._secId;
       var bodyHtml = node.loose.map(taskRow).join('');
 
       node.subs.forEach(function(l1) {
-        subN++;
-        var subId = secId + 'l' + subN;
+        var subId = l1._subId;
         var sp1 = spanOf(l1.tasks);
         var subBody = l1.tasks.map(taskRow).join('');
 
@@ -906,39 +913,33 @@
           '<div class="gantt-sec-body" id="' + subId + '">' + subBody + '</div>';
       });
 
-      var l0Row = node.it
-        ? '<div class="gantt-row gantt-sec-pill-row" data-body="' + secId + '" onclick="toggleGanttSec(\'' + secId + '\')">' +
-            '<div style="width:240px;min-width:240px;flex-shrink:0;padding:6px 12px;border-right:1px solid rgba(75,40,109,0.08);display:flex;align-items:center">' +
-              '<div class="gantt-sec-pill">' + chevSvg + '<span>' + esc(node.it.r.task) + '</span></div>' +
-            '</div>' +
-            '<div class="gantt-row-bars" style="flex:1;position:relative;height:36px">' + gridLines + todayLine + summaryBar(sp0) + '</div>' +
-          '</div>'
-        : '';
-
-      return l0Row + '<div class="gantt-sec-body" id="' + secId + '">' + bodyHtml + '</div>';
+      return '<div class="gantt-sec-body" id="' + secId + '">' + bodyHtml + '</div>';
     }).join('');
 
     var legend =
-      '<div class="gantt-legend">' +
-        '<div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:var(--green)"></div>Complete</div>' +
-        '<div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:var(--purple)"></div>In Progress</div>' +
-        '<div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(75,40,109,0.20)"></div>Pending</div>' +
-        '<div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:var(--amber)"></div>At Risk</div>' +
-        '<div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:var(--red)"></div>Overdue</div>' +
-        '<div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(192,57,43,0.55);width:3px;height:14px;border-radius:2px"></div>Today</div>' +
+      '<div class="gantt-controls">' +
+        '<div class="gantt-legend">' +
+          '<div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:var(--green)"></div>Complete</div>' +
+          '<div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:var(--purple)"></div>In Progress</div>' +
+          '<div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(75,40,109,0.20)"></div>Pending</div>' +
+          '<div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:var(--amber)"></div>At Risk</div>' +
+          '<div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:var(--red)"></div>Overdue</div>' +
+          '<div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(192,57,43,0.55);width:3px;height:14px;border-radius:2px"></div>Today</div>' +
+        '</div>' +
+        (pillsHtml ? '<div class="gantt-section-pills">' + pillsHtml + '</div>' : '') +
       '</div>';
 
     return '<div id="workback" class="page"><div class="wrap"><div class="section">' +
       hdr +
-      '<p class="section-lead">Click any section heading to expand or collapse it. Hover bars for details. Status dropdowns update the sheet live.</p>' +
+      '<p class="section-lead">Use the section pills to expand or collapse groups. Hover bars for details. Status dropdowns update the sheet live.</p>' +
       legend +
-      '<div class="gantt-wrap"><div class="gantt-inner">' +
+      '<div class="gantt-wrap"><div class="gantt-body-scroll"><div class="gantt-inner">' +
         '<div class="gantt-head">' +
           '<div class="gantt-head-label">Task / Status</div>' +
           '<div class="gantt-head-months">' + monthLabels + '</div>' +
         '</div>' +
         ganttBody +
-      '</div></div>' +
+      '</div></div></div>' +
     '</div></div></div>';
   }
 
