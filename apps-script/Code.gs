@@ -108,26 +108,39 @@ function getRaid(ss) {
   });
 }
 
-// ---- Program Team (Roles and Responsibilities tab) ----
-// Columns: Abbreviation | Group | Group Leader(s)
+// ---- Program Team (R&R tab, rows 1-26) ----
+// Col A: category/stream  Col B: owner(s)  Col C: others associated
+// Main group headers: Core Working Group | Team | IPP Workstream
 function getTeam(ss) {
-  var sheet = getSheet(ss, TAB.ROLES) || getSheet(ss, TAB.TEAM);
+  var sheet = getSheet(ss, TAB.TEAM) || getSheet(ss, TAB.ROLES);
   if (!sheet) return [];
-  var rows = sheetToObjects(sheet);
 
+  var lastRow = Math.min(26, sheet.getLastRow());
+  if (lastRow < 1) return [];
+  var data = sheet.getRange(1, 1, lastRow, 3).getValues();
+
+  var MAIN_GROUPS = ['CORE WORKING GROUP', 'TEAM', 'IPP WORKSTREAM'];
+  var currentGroup = '';
   var members = [];
-  rows.filter(function(r) {
-    return r['Group'] || r['Group Leader(s)'];
-  }).forEach(function(r) {
-    var group   = String(r['Group'] || '').trim();
-    var abbr    = String(r['Abbreviation'] || '').trim();
-    var leaders = String(r['Group Leader(s)'] || '').trim();
-    if (!leaders) return;
-    leaders.split(/[,\n]+/).forEach(function(name) {
-      name = name.trim();
-      if (name) members.push({ name: name, role: group, email: '', team: abbr });
-    });
+
+  data.forEach(function(row) {
+    var colA = String(row[0] || '').trim();
+    var colB = String(row[1] || '').trim();
+    var colC = String(row[2] || '').trim();
+    if (!colA && !colB && !colC) return;
+
+    // Detect a main group header in col A
+    var upperA = colA.toUpperCase().replace(/[^A-Z ]/g, '').trim();
+    var isGroup = MAIN_GROUPS.some(function(g) { return upperA === g || upperA.indexOf(g) > -1; });
+    if (isGroup) { currentGroup = colA; return; }
+
+    var owners = colB ? colB.split(/[,\n;]+/).map(function(n) { return n.trim(); }).filter(Boolean) : [];
+    var others = colC ? colC.split(/[,\n;]+/).map(function(n) { return n.trim(); }).filter(Boolean) : [];
+    if (!colA && !owners.length) return;
+
+    members.push({ group: currentGroup || 'General', stream: colA, owners: owners, others: others });
   });
+
   return members;
 }
 

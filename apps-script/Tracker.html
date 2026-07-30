@@ -750,27 +750,54 @@
 
   function renderTeam() {
     var members = DATA.team || [];
-    var cards = members.length ? members.map(function(m) {
-      var initials = m.name.split(' ').map(function(w) { return w[0] || ''; }).slice(0, 2).join('').toUpperCase();
-      return '<div class="team-card">' +
-        '<div class="avatar-sm">' + esc(initials) + '</div>' +
-        '<div>' +
-          '<div class="tc-name">' + esc(m.name) + '</div>' +
-          (m.role ? '<div class="tc-role">' + esc(m.role) + '</div>' : '') +
-          (m.email ? '<a class="tc-email" href="mailto:' + esc(m.email) + '">' + esc(m.email) + '</a>' : '') +
-        '</div>' +
-      '</div>';
-    }).join('') : '<div class="empty">No team members loaded. Check the Program_Team tab.</div>';
 
-    return '<div id="team" class="page">' +
-      '<div class="wrap">' +
-        '<div class="section">' +
-          '<div class="eyebrow">Program Team</div>' +
-          '<h2 class="section-title">Team Directory</h2>' +
-          '<p class="section-lead">Members of the 2027 IPP core working team and their roles.</p>' +
-          '<div class="team-grid">' + cards + '</div>' +
-        '</div>' +
-      '</div></div>';
+    if (!members.length) {
+      return '<div id="team" class="page"><div class="wrap"><div class="section">' +
+        '<div class="eyebrow">Program Team</div>' +
+        '<h2 class="section-title">Team Directory</h2>' +
+        '<div class="empty">No team data loaded. Check the R&R tab.</div>' +
+        '</div></div></div>';
+    }
+
+    // Group entries by their main category
+    var groups = {};
+    var groupOrder = [];
+    members.forEach(function(m) {
+      if (!groups[m.group]) { groups[m.group] = []; groupOrder.push(m.group); }
+      groups[m.group].push(m);
+    });
+
+    var sections = groupOrder.map(function(groupName) {
+      var cards = groups[groupName].map(function(m) {
+        var ownerHtml = m.owners.map(function(o) {
+          var ini = o.split(' ').map(function(w) { return w[0] || ''; }).slice(0, 2).join('').toUpperCase();
+          return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+            '<div class="avatar-sm" style="width:32px;height:32px;font-size:11px;flex-shrink:0">' + esc(ini) + '</div>' +
+            '<div class="tc-name">' + esc(o) + '</div>' +
+          '</div>';
+        }).join('');
+
+        return '<div style="padding:16px 18px;border:1px solid rgba(75,40,109,0.12);border-radius:12px;background:#fff">' +
+          (m.stream ? '<div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--purple);margin-bottom:10px">' + esc(m.stream) + '</div>' : '') +
+          ownerHtml +
+          (m.others.length ? '<div style="margin-top:6px;font-size:11px;color:rgba(43,22,63,0.45)">Also: ' + esc(m.others.join(', ')) + '</div>' : '') +
+        '</div>';
+      }).join('');
+
+      return '<div class="section">' +
+        '<div class="eyebrow">' + esc(groupName) + '</div>' +
+        '<div class="team-grid">' + cards + '</div>' +
+      '</div>';
+    }).join('');
+
+    return '<div id="team" class="page"><div class="wrap">' +
+      '<div class="section" style="padding-bottom:24px">' +
+        '<div class="eyebrow">Program Team</div>' +
+        '<h2 class="section-title">Team Directory</h2>' +
+        '<p class="section-lead">2027 IPP working group by stream. Owners listed per stream; others associated shown below.</p>' +
+      '</div>' +
+      sections +
+    '</div></div>';
   }
 
   // ---- Nav & routing ----
