@@ -78,6 +78,7 @@ function getWorkback(ss) {
       daysLeft:   daysLeft,
       notes:      r['Comments'] || r['Notes'] || '',
       rowIndex:   r._rowIndex,
+      level:      detectGroupLevel(task),
     };
   });
 }
@@ -392,6 +393,16 @@ function sheetToObjects(sheet, withRowIndex) {
   }).filter(function(r) {
     return Object.values(r).some(function(v) { return v !== '' && v !== null && v !== undefined; });
   });
+}
+
+function detectGroupLevel(task) {
+  var s = String(task || '').trim();
+  if (!s) return 2;
+  // Top-level section: "1 Sales...", "2 Budget...", "3) Segmentation...", "8) Letters..."
+  if (/^[0-9]+[\s\)]+[A-Za-z]/.test(s)) return 0;
+  // Sub-section: "1a. SIP...", "1b Roles...", "3a Resource...", "5e Specialty..."
+  if (/^[0-9]+[a-zA-Z][\s\.]/.test(s)) return 1;
+  return 2;
 }
 
 function normalizeStatus(raw) {

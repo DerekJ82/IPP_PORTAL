@@ -442,6 +442,17 @@
     .gantt-legend { display: flex; gap: 16px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
     .gantt-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgba(43,22,63,0.6); }
     .gantt-legend-dot { width: 14px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    /* Gantt collapsible sections */
+    .gantt-sec-head { cursor: pointer; background: rgba(75,40,109,0.08); }
+    .gantt-sec-head:hover { background: rgba(75,40,109,0.13); }
+    .gantt-sub-head { cursor: pointer; background: rgba(75,40,109,0.04); }
+    .gantt-sub-head:hover { background: rgba(75,40,109,0.08); }
+    .gantt-sec-label { font-size: 13px; font-weight: 700; color: var(--purple); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gantt-subsec-label { font-size: 12px; font-weight: 700; color: var(--dark); padding-left: 20px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gantt-sec-body { overflow: hidden; max-height: 9000px; transition: max-height .45s ease; }
+    .gantt-sec-body.closed { max-height: 0; }
+    .gantt-chev { transition: transform .3s ease; flex-shrink: 0; }
+    .gantt-chev.rotated { transform: rotate(180deg); }
 
     /* ---- Inline status select ---- */
     .status-select {
@@ -734,88 +745,167 @@
         '<div class="empty">No workback items loaded.</div></div></div></div>';
     }
 
-    // Parse dates for each row
+    // Parse items — keep level from server
     var items = rows.filter(function(r) { return r.task; }).map(function(r) {
       var s = r.startDateISO ? new Date(r.startDateISO + 'T12:00:00Z') : null;
       var e = r.dueDateISO   ? new Date(r.dueDateISO   + 'T12:00:00Z') : null;
       if (s && isNaN(s)) s = null;
       if (e && isNaN(e)) e = null;
-      return { r: r, s: s, e: e };
+      return { r: r, s: s, e: e, level: r.level != null ? r.level : 2 };
     });
 
-    // Find overall date range
+    // Overall date range (task rows only for span)
     var minT = Infinity, maxT = -Infinity;
     items.forEach(function(it) {
       if (it.s) minT = Math.min(minT, it.s.getTime());
       if (it.e) maxT = Math.max(maxT, it.e.getTime());
     });
-
     if (minT === Infinity) {
       return '<div id="workback" class="page"><div class="wrap"><div class="section">' + hdr +
-        '<div class="empty">No date information found — add start/end dates to the workback sheet.</div></div></div></div>';
+        '<div class="empty">No date information found in the workback sheet.</div></div></div></div>';
     }
 
-    // Snap to month boundaries
     var gStart = new Date(new Date(minT).getFullYear(), new Date(minT).getMonth(), 1);
     var gEndD  = new Date(maxT);
     var gEnd   = new Date(gEndD.getFullYear(), gEndD.getMonth() + 1, 0, 23, 59, 59);
     var totalMs = gEnd.getTime() - gStart.getTime();
-
     function pct(d) { return Math.max(0, Math.min(100, (d.getTime() - gStart.getTime()) / totalMs * 100)); }
 
-    // Month labels + grid lines (built once, reused in every row)
+    // Month labels + grid lines
     var monthLabels = '', gridLines = '';
     var cur = new Date(gStart);
     while (cur <= gEnd) {
-      var lp  = pct(cur).toFixed(2);
-      var next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-      var wp  = (pct(next) - pct(cur)).toFixed(2);
+      var lp = pct(cur).toFixed(2);
+      var nxt = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      var wp  = (pct(nxt) - pct(cur)).toFixed(2);
       monthLabels += '<div class="gantt-month-lbl" style="left:' + lp + '%;width:' + wp + '%">' +
         MONTH_NAMES[cur.getMonth()].slice(0, 3) + ' \'' + String(cur.getFullYear()).slice(2) + '</div>';
       if (pct(cur) > 0) gridLines += '<div class="gantt-grid-line" style="left:' + lp + '%"></div>';
-      cur = next;
+      cur = nxt;
     }
 
-    // Today marker
     var todayD = new Date(); todayD.setHours(12, 0, 0, 0);
     var todayLine = (todayD >= gStart && todayD <= gEnd)
       ? '<div class="gantt-today-line" style="left:' + pct(todayD).toFixed(2) + '%"></div>' : '';
 
-    // Task rows
-    var rowsHtml = items.map(function(it) {
+    // Chevron SVG
+    var chevSvg = '<svg class="gantt-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>';
+
+    // Compute date span from an array of items
+    function spanOf(arr) {
+      var mn = Infinity, mx = -Infinity;
+      arr.forEach(function(it) {
+        if (it.s) mn = Math.min(mn, it.s.getTime());
+        if (it.e) mx = Math.max(mx, it.e.getTime());
+      });
+      return { s: mn === Infinity ? null : new Date(mn), e: mx === -Infinity ? null : new Date(mx) };
+    }
+
+    // Render a summary bar (thin, for section/sub-section headers)
+    function summaryBar(sp) {
+      if (!sp.s && !sp.e) return '';
+      var s = sp.s || sp.e, e = sp.e || sp.s;
+      var l = pct(s).toFixed(2), w = Math.max(0.5, pct(e) - pct(s)).toFixed(2);
+      return '<div style="position:absolute;top:50%;transform:translateY(-50%);left:' + l + '%;width:' + w +
+        '%;height:8px;border-radius:3px;background:rgba(75,40,109,0.25)"></div>';
+    }
+
+    // Render a task bar
+    function taskBar(it) {
+      if (!it.s && !it.e) return '';
       var r = it.r;
-      var barHtml = '';
-
+      var tip = r.task + (r.owner ? '\nOwner: ' + r.owner : '') +
+        (r.startDateISO ? '\nStart: ' + r.startDateISO : '') +
+        (r.dueDateISO   ? '\nEnd: '   + r.dueDateISO   : '') +
+        '\nStatus: ' + r.status +
+        (r.notes ? '\n' + r.notes.slice(0, 120) : '');
+      var cls = 'gantt-bar ' + ganttBarCls(r.status);
       if (it.s && it.e) {
-        var l = pct(it.s).toFixed(2);
-        var w = Math.max(0.4, pct(it.e) - pct(it.s)).toFixed(2);
-        var tip = r.task +
-          (r.owner ? '\nOwner: ' + r.owner : '') +
-          '\n' + (r.startDateISO || '') + ' → ' + (r.dueDateISO || '') +
-          '\nStatus: ' + r.status +
-          (r.notes ? '\n' + r.notes.slice(0, 120) : '');
-        barHtml = '<div class="gantt-bar ' + ganttBarCls(r.status) +
-          '" style="left:' + l + '%;width:' + w + '%" title="' + esc(tip) + '"></div>';
-      } else if (it.e) {
-        // End-only: rotated diamond marker
-        var l = pct(it.e).toFixed(2);
-        var tip = r.task + (r.owner ? '\nOwner: ' + r.owner : '') + '\nDue: ' + (r.dueDate || '') + '\nStatus: ' + r.status;
-        barHtml = '<div class="gantt-bar ' + ganttBarCls(r.status) +
-          '" style="left:calc(' + l + '% - 8px);width:14px;height:14px;border-radius:2px;transform:translateY(-50%) rotate(45deg)" title="' + esc(tip) + '"></div>';
+        var l = pct(it.s).toFixed(2), w = Math.max(0.4, pct(it.e) - pct(it.s)).toFixed(2);
+        return '<div class="' + cls + '" style="left:' + l + '%;width:' + w + '%" title="' + esc(tip) + '"></div>';
       }
+      var l = pct(it.e).toFixed(2);
+      return '<div class="' + cls + '" style="left:calc(' + l + '% - 7px);width:13px;height:13px;border-radius:2px;transform:translateY(-50%) rotate(45deg)" title="' + esc(tip) + '"></div>';
+    }
 
-      var labelMeta = [r.owner, r.workstream].filter(Boolean).join(' · ');
-
+    // Render a task row
+    function taskRow(it) {
+      var r = it.r;
+      var meta = [r.owner, r.workstream].filter(Boolean).join(' · ');
       return '<div class="gantt-row">' +
         '<div class="gantt-row-label">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;gap:4px">' +
-            '<div class="gantt-task-name" title="' + esc(r.task) + '">' + esc(r.task) + '</div>' +
+          '<div class="gantt-task-name" title="' + esc(r.task) + '">' + esc(r.task) + '</div>' +
+          '<div style="display:flex;align-items:center;gap:5px;margin-top:2px">' +
             statusSelect(r.status, r.rowIndex) +
+            (meta ? '<span class="gantt-task-meta" style="min-width:0;overflow:hidden;text-overflow:ellipsis">' + esc(meta) + '</span>' : '') +
           '</div>' +
-          (labelMeta ? '<div class="gantt-task-meta">' + esc(labelMeta) + '</div>' : '') +
         '</div>' +
-        '<div class="gantt-row-bars">' + gridLines + todayLine + barHtml + '</div>' +
+        '<div class="gantt-row-bars">' + gridLines + todayLine + taskBar(it) + '</div>' +
       '</div>';
+    }
+
+    // Build tree: L0 → L1 → L2
+    var tree = [];
+    var curL0 = null, curL1 = null;
+    items.forEach(function(it) {
+      if (it.level === 0) {
+        curL0 = { it: it, subs: [], loose: [] };
+        curL1 = null;
+        tree.push(curL0);
+      } else if (it.level === 1) {
+        curL1 = { it: it, tasks: [] };
+        if (curL0) { curL0.subs.push(curL1); }
+        else { curL0 = { it: null, subs: [curL1], loose: [] }; tree.push(curL0); }
+      } else {
+        if (curL1)      { curL1.tasks.push(it); }
+        else if (curL0) { curL0.loose.push(it); }
+        else            { tree.push({ standalone: it }); }
+      }
+    });
+
+    var secN = 0;
+
+    // Render the tree
+    var ganttBody = tree.map(function(node) {
+      if (node.standalone) return taskRow(node.standalone);
+
+      secN++;
+      var secId = 'gss' + secN;
+
+      // All L2 tasks in this L0 section (for span)
+      var allTasks = [].concat(node.loose);
+      node.subs.forEach(function(l1) { allTasks = allTasks.concat(l1.tasks); });
+      var sp0 = spanOf(allTasks);
+
+      var subN = 0;
+      var bodyHtml = node.loose.map(taskRow).join('');
+
+      node.subs.forEach(function(l1) {
+        subN++;
+        var subId = secId + 'l' + subN;
+        var sp1 = spanOf(l1.tasks);
+        var subBody = l1.tasks.map(taskRow).join('');
+
+        bodyHtml +=
+          '<div class="gantt-row gantt-sub-head" onclick="toggleGanttSec(\'' + subId + '\')">' +
+            '<div class="gantt-row-label" style="padding-left:24px;display:flex;align-items:center;gap:6px;width:240px;min-width:240px;flex-shrink:0;border-right:1px solid rgba(75,40,109,0.08)">' +
+              chevSvg + '<span class="gantt-subsec-label" style="padding-left:0">' + esc(l1.it.r.task) + '</span>' +
+            '</div>' +
+            '<div class="gantt-row-bars" style="flex:1;position:relative;height:44px">' + gridLines + todayLine + summaryBar(sp1) + '</div>' +
+          '</div>' +
+          '<div class="gantt-sec-body" id="' + subId + '">' + subBody + '</div>';
+      });
+
+      var l0Row = node.it
+        ? '<div class="gantt-row gantt-sec-head" onclick="toggleGanttSec(\'' + secId + '\')">' +
+            '<div class="gantt-row-label" style="width:240px;min-width:240px;flex-shrink:0;padding:8px 16px;border-right:1px solid rgba(75,40,109,0.12);display:flex;align-items:center;gap:6px">' +
+              chevSvg + '<span class="gantt-sec-label">' + esc(node.it.r.task) + '</span>' +
+            '</div>' +
+            '<div class="gantt-row-bars" style="flex:1;position:relative;height:44px">' + gridLines + todayLine + summaryBar(sp0) + '</div>' +
+          '</div>'
+        : '';
+
+      return l0Row + '<div class="gantt-sec-body" id="' + secId + '">' + bodyHtml + '</div>';
     }).join('');
 
     var legend =
@@ -830,16 +920,30 @@
 
     return '<div id="workback" class="page"><div class="wrap"><div class="section">' +
       hdr +
-      '<p class="section-lead">Hover any bar for full details. Use the status dropdown on each row to update live. Today\'s date is the red line.</p>' +
+      '<p class="section-lead">Click any section heading to expand or collapse it. Hover bars for details. Status dropdowns update the sheet live.</p>' +
       legend +
       '<div class="gantt-wrap"><div class="gantt-inner">' +
         '<div class="gantt-head">' +
           '<div class="gantt-head-label">Task / Status</div>' +
           '<div class="gantt-head-months">' + monthLabels + '</div>' +
         '</div>' +
-        rowsHtml +
+        ganttBody +
       '</div></div>' +
     '</div></div></div>';
+  }
+
+  function toggleGanttSec(id) {
+    var body = document.getElementById(id);
+    if (!body) return;
+    body.classList.toggle('closed');
+    // Rotate chevron on the row that owns this section
+    var rows = document.querySelectorAll('.gantt-sec-head, .gantt-sub-head');
+    rows.forEach(function(row) {
+      if (row.getAttribute('onclick') && row.getAttribute('onclick').indexOf(id) > -1) {
+        var chev = row.querySelector('.gantt-chev');
+        if (chev) chev.classList.toggle('rotated');
+      }
+    });
   }
 
   function renderRaid() {
