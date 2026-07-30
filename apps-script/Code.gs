@@ -224,6 +224,29 @@ function checkMilestones() {
   sendChatNotification(msg);
 }
 
+// ---- Debug: run this from the Apps Script editor to see tab names and headers ----
+function debugSheetInfo() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var result = { allTabs: [], targets: {} };
+
+  // List every tab name
+  result.allTabs = ss.getSheets().map(function(s) { return s.getName(); });
+
+  // For each target tab, show the first row of headers
+  Object.keys(TAB).forEach(function(key) {
+    var sheet = getSheet(ss, TAB[key]);
+    if (sheet) {
+      var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      result.targets[key] = { found: sheet.getName(), headers: headers };
+    } else {
+      result.targets[key] = { found: null, looking_for: TAB[key] };
+    }
+  });
+
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
 // ---- Install / remove daily time-driven trigger ----
 function installDailyTrigger() {
   deleteTriggers('checkMilestones');
