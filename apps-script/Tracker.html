@@ -890,7 +890,7 @@
 
     // Section pills rendered beside the legend
     var pillsHtml = tree.filter(function(n) { return !n.standalone && n.it; }).map(function(node) {
-      return '<button class="gantt-sec-pill" data-body="' + node._secId + '" onclick="toggleGanttSec(\'' + node._secId + '\')">' +
+      return '<button class="gantt-sec-pill inactive" data-body="' + node._secId + '" onclick="toggleGanttSec(\'' + node._secId + '\')">' +
         '<span>' + esc(node.it.r.task) + '</span>' +
       '</button>';
     }).join('');
@@ -917,7 +917,7 @@
           '<div class="gantt-sec-body" id="' + subId + '">' + subBody + '</div>';
       });
 
-      return '<div class="gantt-sec-body" id="' + secId + '">' + bodyHtml + '</div>';
+      return '<div class="gantt-sec-body closed" id="' + secId + '">' + bodyHtml + '</div>';
     }).join('');
 
     var legend =
