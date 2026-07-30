@@ -78,7 +78,7 @@ function getWorkback(ss) {
       daysLeft:   daysLeft,
       notes:      r['Comments'] || r['Notes'] || '',
       rowIndex:   r._rowIndex,
-      level:      detectGroupLevel(task),
+      level:      detectGroupLevel(task, owner),
     };
   });
 }
@@ -395,13 +395,41 @@ function sheetToObjects(sheet, withRowIndex) {
   });
 }
 
-function detectGroupLevel(task) {
-  var s = String(task || '').trim();
-  if (!s) return 2;
-  // Top-level section: "1 Sales...", "2 Budget...", "3) Segmentation...", "8) Letters..."
-  if (/^[0-9]+[\s\)]+[A-Za-z]/.test(s)) return 0;
-  // Sub-section: "1a. SIP...", "1b Roles...", "3a Resource...", "5e Specialty..."
-  if (/^[0-9]+[a-zA-Z][\s\.]/.test(s)) return 1;
+function detectGroupLevel(task, owner) {
+  var t = String(task || '').trim().toLowerCase();
+  if (!t) return 2;
+  // If any owner is assigned, it's always a task row
+  if (owner && String(owner).trim() !== '') return 2;
+
+  // Sub-sections checked first so short names (e.g. "Product") don't shadow them
+  var L1 = [
+    'sip redesign', 'roles in sap', '2027 sip budget',
+    'tool build out', 'budget timeline',
+    'resource planning', 'segmentation & rad', 'segmentation and rad',
+    'ecat', 'account assignment',
+    'align on renewal', 'sales productivity',
+    'vp target model', 'sign off vp',
+    'cross sell', 'specialty sales', 'territory target', 'target submission',
+    'product hierarchy', 'tech sales',
+    'rep level br', 'vp / segment level br', 'vp/segment level br',
+  ];
+  var L0 = [
+    'sales incentive plan', 'budget interlock',
+    'segmentation and resource planning',
+    'renewal targets', 'growth targets',
+    'billed revenue targets', 'letters of expectation',
+  ];
+
+  for (var i = 0; i < L1.length; i++) {
+    if (t.indexOf(L1[i]) > -1) return 1;
+  }
+  for (var i = 0; i < L0.length; i++) {
+    if (t.indexOf(L0[i]) > -1) return 0;
+  }
+  // "Product" as a standalone main section
+  if (t === 'product') return 0;
+
+  // No owner and no name match — still a task (owner not yet assigned)
   return 2;
 }
 
