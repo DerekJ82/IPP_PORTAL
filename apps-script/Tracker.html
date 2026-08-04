@@ -686,7 +686,7 @@
       var iso = w.startDateISO || w.dueDateISO || isoFromFormatted(w.dueDate);
       var lbl = w.task || '';
       var isRec = /project team meeting|core working.*(team|group|team) meeting/i.test(lbl);
-      addEv(iso, { label: lbl, type: isRec ? 'recurring' : 'workback', status: w.status, notes: w.notes || '' });
+      addEv(iso, { label: lbl, type: isRec ? 'recurring' : 'workback', status: w.status, notes: w.notes || '', due: w.dueDate || '', daysLeft: w.daysLeft });
     });
 
     var header =
@@ -728,9 +728,9 @@
       var MAX_SHOW = 3;
       var evHtml = evs.slice(0, MAX_SHOW).map(function(ev) {
         var stCls = ev.status === 'COMPLETE' ? ' complete' : ev.status === 'OVERDUE' ? ' overdue' : ev.status === 'AT RISK' ? ' at-risk' : '';
-        var cls   = ev.type === 'recurring' ? 'cal-event recurring' : ('cal-event milestone' + stCls);
-        var tip   = ev.notes ? ' data-tip="' + esc(ev.notes) + '" onmouseenter="showCalTip(this)" onmouseleave="hideCalTip()"'
-                             : ' title="' + esc(ev.label) + '"';
+        var cls      = ev.type === 'recurring' ? 'cal-event recurring' : ('cal-event milestone' + stCls);
+        var daysAttr = ev.daysLeft !== undefined && ev.daysLeft !== null ? ev.daysLeft : '';
+        var tip      = ' data-tip="' + esc(ev.notes) + '" data-due="' + esc(ev.due) + '" data-days="' + daysAttr + '" data-status="' + esc(ev.status) + '" onmouseenter="showCalTip(this)" onmouseleave="hideCalTip()"';
         return '<span class="' + cls + '"' + tip + '>' + esc(ev.label) + '</span>';
       }).join('');
       if (evs.length > MAX_SHOW) {
@@ -751,10 +751,19 @@
   }
 
   function showCalTip(el) {
-    var tip   = document.getElementById('calTip');
-    var label = el.textContent;
-    var notes = el.getAttribute('data-tip');
-    tip.innerHTML = '<strong>' + label + '</strong><br>' + notes;
+    var tip    = document.getElementById('calTip');
+    var label  = el.textContent;
+    var notes  = el.getAttribute('data-tip');
+    var due    = el.getAttribute('data-due');
+    var days   = el.getAttribute('data-days');
+    var status = el.getAttribute('data-status');
+    var isOverdue = days !== '' && days !== null && Number(days) < 0 && status !== 'COMPLETE';
+    var html   = '<strong>' + label + '</strong>';
+    if (due) {
+      html += '<br><span style="opacity:.75">Due: ' + due + (isOverdue ? ' &nbsp;⚠️ Overdue' : '') + '</span>';
+    }
+    if (notes) html += '<br><span style="opacity:.65;font-style:italic">' + notes + '</span>';
+    tip.innerHTML = html;
     tip.classList.add('visible');
     document.addEventListener('mousemove', _moveCalTip);
   }
