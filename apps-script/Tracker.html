@@ -1066,16 +1066,24 @@
   }
 
   function renderOutputs() {
+    var placeholders = [
+      { title: 'Placeholder one',   desc: 'Details to Come' },
+      { title: 'Placeholder two',   desc: 'Details to Come' },
+      { title: 'Placeholder three', desc: 'Details to Come' },
+      { title: 'Placeholder four',  desc: 'Details to Come' },
+      { title: 'Placeholder five',  desc: 'Details to Come' },
+      { title: 'Placeholder six',   desc: 'Details to Come' }
+    ];
+    var cards = placeholders.map(function(p) {
+      return '<div class="card">' +
+        '<div class="card-title" style="font-size:16px">' + p.title + '</div>' +
+        '<div class="card-notes" style="margin-top:6px">' + p.desc + '</div>' +
+      '</div>';
+    }).join('');
     return '<div id="outputs" class="page"><div class="wrap"><div class="section">' +
       '<div class="eyebrow">Deliverables</div>' +
       '<h2 class="section-title">Outputs</h2>' +
-      '<div style="text-align:center;padding:80px 0 100px">' +
-        '<div style="font-size:56px;margin-bottom:20px">&#128679;</div>' +
-        '<div style="font-size:30px;font-weight:900;color:var(--purple);letter-spacing:-0.02em;margin-bottom:12px">Coming Soon</div>' +
-        '<div style="font-size:16px;color:rgba(43,22,63,0.5);font-weight:300;max-width:480px;margin:0 auto;line-height:1.6">' +
-          'Program outputs, deliverables, and final documents will be tracked and linked here.' +
-        '</div>' +
-      '</div>' +
+      '<div class="card-grid" style="margin-top:24px">' + cards + '</div>' +
     '</div></div></div>';
   }
 
