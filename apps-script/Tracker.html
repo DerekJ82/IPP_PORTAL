@@ -670,7 +670,7 @@
       evIndex[key].push(ev);
     }
     (DATA.workback || []).forEach(function(w) {
-      var iso = w.dueDateISO || isoFromFormatted(w.dueDate);
+      var iso = w.startDateISO || w.dueDateISO || isoFromFormatted(w.dueDate);
       addEv(iso, { label: w.task, type: 'workback', status: w.status });
     });
 
